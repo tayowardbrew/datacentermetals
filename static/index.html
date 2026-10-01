@@ -10,127 +10,202 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"
+    integrity="sha256-xIhA5nFLHd1C9GSNVFoWQrLBwqgpR0JL6YXAbL8gkIE="
+    crossorigin=""
+  />
   <style>
     :root {
-      --bg: #0f1419;
-      --panel: #1a2029;
-      --panel-2: #222b36;
-      --line: #2d3846;
-      --text: #e6edf3;
-      --muted: #8b98a5;
-      --accent: #4fd1c5;
-      --accent-2: #f6ad55;
-      --warn: #f6ad55;
-      --good: #68d391;
+      /* Wood Mackenzie-inspired institutional research palette */
+      --navy:      #0a1f3c;   /* deep research-house navy */
+      --navy-2:    #0e2748;   /* panel navy */
+      --navy-3:    #13315a;   /* raised surface */
+      --line:      #1e3a5f;
+      --teal:      #19c3b2;   /* primary accent (petrol/teal) */
+      --teal-dim:  #0f8f84;
+      --petrol:    #2b6f8f;
+      --text:      #eaf1f8;
+      --muted:     #93a6bd;
+      --warn:      #e0a44c;
+      --good:      #35c48a;
+      --bad:       #e2706a;
     }
     * { box-sizing: border-box; }
+    html, body { overflow-x: hidden; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--navy);
       color: var(--text);
       line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
-    header {
-      padding: 28px 20px 18px;
-      border-bottom: 1px solid var(--line);
-      max-width: 1100px;
-      margin: 0 auto;
+    .masthead {
+      border-bottom: 2px solid var(--teal);
+      background: linear-gradient(180deg, #081832 0%, var(--navy) 100%);
     }
-    header h1 { margin: 0 0 6px; font-size: 1.55rem; }
-    header p { margin: 4px 0; color: var(--muted); font-size: 0.92rem; }
+    .masthead-inner { max-width: 1180px; margin: 0 auto; padding: 26px 22px 20px; }
+    .brandrow { display: flex; align-items: center; gap: 12px; }
+    .mark {
+      width: 30px; height: 30px; border-radius: 5px; flex: none;
+      background: var(--teal);
+      display: grid; place-items: center;
+      color: var(--navy); font-weight: 800; font-size: 1rem; letter-spacing: -0.5px;
+    }
+    .masthead h1 {
+      margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.66rem;
+      color: var(--teal); font-weight: 700; margin: 0 0 2px;
+    }
+    .masthead p { margin: 10px 0 0; color: var(--muted); font-size: 0.9rem; max-width: 820px; }
+    .masthead p.lede { color: var(--text); }
     .wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 20px;
-      display: grid;
-      grid-template-columns: 360px 1fr;
-      gap: 24px;
+      max-width: 1180px; margin: 0 auto; padding: 22px;
+      display: grid; grid-template-columns: 350px 1fr; gap: 22px; align-items: start;
     }
-    @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
     .card {
-      background: var(--panel);
+      background: var(--navy-2);
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 8px;
       padding: 18px;
     }
-    label { display: block; font-size: 0.82rem; color: var(--muted); margin: 12px 0 4px; }
+    .card h2 { margin: 0 0 4px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--teal); font-weight: 700; }
+    .card .sub { color: var(--muted); font-size: 0.8rem; margin: 0 0 14px; }
+    label { display: block; font-size: 0.74rem; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); margin: 14px 0 5px; font-weight: 600; }
     input, select {
-      width: 100%;
-      padding: 9px 10px;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      color: var(--text);
-      font-size: 0.95rem;
+      width: 100%; padding: 9px 10px;
+      background: var(--navy); border: 1px solid var(--line);
+      border-radius: 5px; color: var(--text); font-size: 0.95rem;
     }
+    input:focus, select:focus { outline: none; border-color: var(--teal); }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    button {
-      width: 100%;
-      margin-top: 18px;
-      padding: 11px;
-      background: var(--accent);
-      color: #06231f;
-      border: none;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 0.98rem;
-      cursor: pointer;
+    button.primary {
+      width: 100%; margin-top: 18px; padding: 12px;
+      background: var(--teal); color: var(--navy);
+      border: none; border-radius: 5px; font-weight: 700; font-size: 0.95rem;
+      cursor: pointer; letter-spacing: 0.02em;
     }
-    button:hover { filter: brightness(1.07); }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .hint { font-size: 0.76rem; color: var(--muted); margin-top: 6px; }
-    #map { height: 320px; border-radius: 10px; border: 1px solid var(--line); margin-bottom: 16px; }
-    .results h2 { font-size: 1.1rem; margin: 0 0 10px; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    button.primary:hover { background: #22d8c6; }
+    button.primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    button.ghost {
+      width: 100%; margin-top: 8px; padding: 9px;
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 5px; font-size: 0.82rem; cursor: pointer;
+    }
+    button.ghost:hover { border-color: var(--teal); color: var(--text); }
+    .hint { font-size: 0.74rem; color: var(--muted); margin-top: 6px; }
+    .mode-tabs { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 4px; }
+    .mode-tabs button {
+      flex: 1; padding: 9px 6px; background: var(--navy); color: var(--muted);
+      border: none; cursor: pointer; font-size: 0.78rem; font-weight: 600;
+    }
+    .mode-tabs button.active { background: var(--navy-3); color: var(--teal); }
+    #map { height: 380px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 16px; }
+    .draw-readout {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.82rem; color: var(--muted); margin: -8px 0 14px; padding: 10px 12px;
+      background: var(--navy-2); border: 1px solid var(--line); border-radius: 6px;
+    }
+    .draw-readout strong { color: var(--teal); font-variant-numeric: tabular-nums; }
+
+    /* Metric panel (research-house style) */
+    .headline {
+      display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--line);
+      border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 16px;
+    }
+    .headline .cell { background: var(--navy-2); padding: 16px 18px; }
+    .headline .cell .k { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
+    .headline .cell .v { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .headline .cell .v small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+    @media (max-width: 560px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+    .metric-grid .m { background: var(--navy-2); padding: 13px 14px; }
+    .metric-grid .m .k { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+    .metric-grid .m .v { font-size: 1.15rem; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+    .panel-title { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--teal); font-weight: 700; margin: 20px 0 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    td { padding: 9px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .section-label { color: var(--accent); font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 14px; }
-    .total td { font-size: 1.05rem; font-weight: 800; border-top: 2px solid var(--accent); border-bottom: none; padding-top: 12px; }
-    .badge { display: inline-block; font-size: 0.68rem; padding: 1px 7px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
-    .badge.live { background: rgba(104,211,145,0.16); color: var(--good); }
-    .badge.static { background: rgba(246,173,85,0.16); color: var(--warn); }
-    .badge.proxy { background: rgba(139,152,165,0.18); color: var(--muted); }
-    .note { font-size: 0.8rem; color: var(--muted); margin: 4px 0; }
-    .error { color: #fc8181; margin-top: 12px; }
-    .status-line { font-size: 0.8rem; color: var(--muted); margin-top: 10px; padding: 8px; background: var(--panel-2); border-radius: 6px; }
-    a { color: var(--accent); }
-    .placeholder { color: var(--muted); text-align: center; padding: 40px 10px; }
-    .disclaimer { margin-top: 22px; padding: 14px; background: var(--panel-2); border-left: 3px solid var(--warn); border-radius: 4px; font-size: 0.82rem; color: var(--muted); }
+    .bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .bar-track { flex: 1; height: 6px; background: var(--navy); border-radius: 3px; overflow: hidden; min-width: 48px; }
+    .bar-fill { height: 100%; background: var(--teal); }
+    .total td { font-size: 1.05rem; font-weight: 800; border-top: 2px solid var(--teal); border-bottom: none; padding-top: 12px; }
+    .badge { display: inline-block; font-size: 0.63rem; padding: 1px 7px; border-radius: 3px; margin-left: 6px; vertical-align: middle; letter-spacing: 0.04em; font-weight: 700; text-transform: uppercase; }
+    .badge.live   { background: rgba(53,196,138,0.16); color: var(--good); }
+    .badge.static { background: rgba(224,164,76,0.16); color: var(--warn); }
+    .badge.proxy  { background: rgba(147,166,189,0.16); color: var(--muted); }
+    .badge.benchmark { background: rgba(43,111,143,0.28); color: #7fc5e3; }
+    .cool-chip { display: inline-block; padding: 6px 12px; border-radius: 20px; background: var(--navy-3); border: 1px solid var(--teal-dim); color: var(--teal); font-weight: 700; font-size: 0.9rem; }
+    .note { font-size: 0.78rem; color: var(--muted); margin: 4px 0; }
+    .error { color: var(--bad); margin-top: 12px; font-size: 0.88rem; }
+    .provenance { font-size: 0.78rem; color: var(--muted); margin-top: 14px; padding: 12px 14px; background: var(--navy); border: 1px solid var(--line); border-radius: 6px; }
+    .provenance strong { color: var(--text); }
+    .provenance .line { padding: 3px 0; }
+    a { color: var(--teal); }
+    .placeholder { color: var(--muted); text-align: center; padding: 48px 10px; font-size: 0.9rem; }
+    .disclaimer { margin-top: 20px; padding: 14px; background: var(--navy); border-left: 3px solid var(--warn); border-radius: 4px; font-size: 0.8rem; color: var(--muted); }
+    footer {
+      border-top: 1px solid var(--line); margin-top: 30px;
+      background: #081832;
+    }
+    .footer-inner { max-width: 1180px; margin: 0 auto; padding: 22px; color: var(--muted); font-size: 0.78rem; }
+    .footer-inner strong { color: var(--text); }
+    .copied { color: var(--good) !important; border-color: var(--good) !important; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Data Center Site Value Estimator</h1>
-    <p>Estimate the implied power capacity, materials intensity (steel, copper), and total site value of a
-      candidate data center parcel from raw coordinates and a building footprint.</p>
-    <p><strong>Why it matters:</strong> an early, defensible estimate of a data center site's implied
-      collateral value can support asset-backed debt raised against the site before or during construction.
-      This connects a commodities/materials-intensity lens to AI infrastructure.</p>
-    <p style="font-size:0.8rem;">Portfolio MVP. Figures are researched benchmarks and regional proxies, not a
-      formal appraisal. See <a href="https://github.com/">README &amp; SOURCES.md</a> for full provenance.</p>
-  </header>
+  <div class="masthead">
+    <div class="masthead-inner">
+      <div class="brandrow">
+        <div class="mark">DC</div>
+        <div>
+          <p class="eyebrow">Infrastructure &amp; Commodities Research</p>
+          <h1>Data Center Site Value Estimator</h1>
+        </div>
+      </div>
+      <p class="lede">Draw a candidate parcel on satellite imagery and estimate its implied power capacity,
+        materials intensity (steel, copper), shell construction cost, rack capacity and typical cooling method —
+        resolved to an implied site value in today's commodity terms.</p>
+      <p><strong>Thesis:</strong> an early, defensible estimate of a data center site's implied collateral value
+        can support an asset-backed debt argument before or during construction, applying a commodities /
+        materials-intensity lens to AI infrastructure.</p>
+    </div>
+  </div>
 
   <div class="wrap">
     <div class="card">
-      <h2 style="margin-top:0;font-size:1.05rem;">Site inputs</h2>
-      <div class="row">
-        <div>
-          <label for="lat">Latitude</label>
-          <input id="lat" type="number" step="any" value="41.8781" />
-        </div>
-        <div>
-          <label for="lng">Longitude</label>
-          <input id="lng" type="number" step="any" value="-87.6298" />
-        </div>
+      <h2>Site inputs</h2>
+      <p class="sub">Draw the parcel on the map, or enter it manually.</p>
+
+      <div class="mode-tabs" id="modeTabs">
+        <button data-mode="draw" class="active">Draw on map</button>
+        <button data-mode="manual">Manual entry</button>
       </div>
-      <p class="hint">Raw coordinates supported (no address required).</p>
+      <p class="hint" id="modeHint">Use the polygon or rectangle tool on the map to outline the footprint. Area is computed geodesically.</p>
 
-      <label for="sqft">Building footprint (sq ft)</label>
-      <input id="sqft" type="number" step="any" value="500000" />
-      <p class="hint">Manual input in v1. Automated size detection from imagery is a roadmap item.</p>
+      <div id="manualFields" style="display:none;">
+        <div class="row">
+          <div>
+            <label for="lat">Latitude</label>
+            <input id="lat" type="number" step="any" value="41.8781" />
+          </div>
+          <div>
+            <label for="lng">Longitude</label>
+            <input id="lng" type="number" step="any" value="-87.6298" />
+          </div>
+        </div>
+        <label for="sqft">Building footprint (sq ft)</label>
+        <input id="sqft" type="number" step="any" value="500000" />
+      </div>
 
-      <label for="region">US region (for land proxy)</label>
+      <label for="region">US region (land proxy)</label>
       <select id="region">
         <option value="national">National average</option>
         <option value="northeast">Northeast / Mid-Atlantic</option>
@@ -139,126 +214,320 @@
         <option value="midwest">Midwest</option>
       </select>
 
-      <button id="go">Estimate site value</button>
+      <button id="go" class="primary">Estimate site value</button>
+      <button id="share" class="ghost" style="display:none;">Copy shareable link to this parcel</button>
+      <button id="clearDraw" class="ghost" style="display:none;">Clear drawn parcel</button>
       <div id="err" class="error"></div>
     </div>
 
     <div>
       <div id="map"></div>
-      <div class="card results">
+      <div class="draw-readout" id="drawReadout" style="display:none;">
+        <span>Drawn parcel area (geodesic)</span>
+        <strong id="drawArea">—</strong>
+      </div>
+      <div class="card">
         <div id="output">
-          <div class="placeholder">Enter a location and footprint, then run the estimate.</div>
+          <div class="placeholder">Draw a parcel on the map (or switch to manual entry), then run the estimate.</div>
         </div>
       </div>
     </div>
   </div>
+
+  <footer>
+    <div class="footer-inner">
+      <strong>Methodology &amp; provenance.</strong> Every benchmark figure (power density, steel &amp; copper
+      intensity, shell cost, rack density, cooling thresholds, land proxy) is documented in SOURCES.md with its
+      source, URL and last-verified date. Live copper pricing is a genuine API call to Metals.Dev; where a live
+      price or source is unavailable, that line is excluded and labelled rather than fabricated. Land value is a
+      regional industrial-land proxy, not a parcel-level appraisal. This is a portfolio MVP, not a formal valuation.
+    </div>
+  </footer>
 
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
     crossorigin=""
   ></script>
+  <script
+    src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"
+    integrity="sha256-mvQnWMc9CvQ_3MeFl2mKU4zX5jbVfbKRHgpYynHkPVY="
+    crossorigin=""
+  ></script>
   <script>
+    const DEFAULT_CENTER = [41.8781, -87.6298];
+
     // --- Map (Esri World Imagery: free, no API key) ---
-    let map = L.map("map").setView([41.8781, -87.6298], 15);
-    let esri = L.tileLayer(
+    const map = L.map("map").setView(DEFAULT_CENTER, 15);
+    L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
       {
         maxZoom: 19,
-        attribution:
-          "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
       }
     ).addTo(map);
-    let marker = L.marker([41.8781, -87.6298]).addTo(map);
 
-    function updateMap(lat, lng) {
-      map.setView([lat, lng], 15);
-      marker.setLatLng([lat, lng]);
+    let manualMarker = null;
+    let drawnLayer = null;          // the single drawn polygon/rectangle
+    let mode = "draw";
+
+    const drawnItems = new L.FeatureGroup().addTo(map);
+    const drawControl = new L.Control.Draw({
+      position: "topright",
+      draw: {
+        polygon: { allowIntersection: false, showArea: false, shapeOptions: { color: "#19c3b2", weight: 2 } },
+        rectangle: { shapeOptions: { color: "#19c3b2", weight: 2 } },
+        polyline: false, circle: false, circlemarker: false, marker: false,
+      },
+      edit: { featureGroup: drawnItems, remove: true },
+    });
+    map.addControl(drawControl);
+
+    // ---- Geodesic polygon area (mirrors server-side geometry.py / L.GeometryUtil) ----
+    const EARTH_RADIUS_M = 6378137.0;
+    const SQ_M_PER_SQ_FT = 0.09290304;
+    function geodesicAreaSqM(latlngs) {
+      let pts = latlngs.slice();
+      if (pts.length >= 2 &&
+          pts[0][0] === pts[pts.length - 1][0] &&
+          pts[0][1] === pts[pts.length - 1][1]) {
+        pts = pts.slice(0, -1);
+      }
+      if (pts.length < 3) return 0;
+      let area = 0;
+      const rad = (d) => (d * Math.PI) / 180;
+      for (let i = 0; i < pts.length; i++) {
+        const [lat1, lng1] = pts[i];
+        const [lat2, lng2] = pts[(i + 1) % pts.length];
+        area += rad(lng2 - lng1) * (2 + Math.sin(rad(lat1)) + Math.sin(rad(lat2)));
+      }
+      area = (area * EARTH_RADIUS_M * EARTH_RADIUS_M) / 2;
+      return Math.abs(area);
+    }
+    const geodesicAreaSqFt = (ll) => geodesicAreaSqM(ll) / SQ_M_PER_SQ_FT;
+
+    function layerToLatLngs(layer) {
+      // Returns [[lat,lng],...] for the outer ring of a polygon/rectangle.
+      const ll = layer.getLatLngs()[0];
+      return ll.map((p) => [p.lat, p.lng]);
     }
 
-    const fmtUSD = (n) =>
-      n == null ? "n/a" : "$" + Math.round(n).toLocaleString("en-US");
+    const fmtUSD = (n) => (n == null ? "n/a" : "$" + Math.round(n).toLocaleString("en-US"));
     const fmtNum = (n, d = 0) =>
       n == null ? "n/a" : Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
 
-    function badge(kind, text) {
-      return `<span class="badge ${kind}">${text}</span>`;
+    function setDrawReadout() {
+      const ro = document.getElementById("drawReadout");
+      if (drawnLayer) {
+        const sqft = geodesicAreaSqFt(layerToLatLngs(drawnLayer));
+        document.getElementById("drawArea").textContent =
+          fmtNum(sqft) + " sq ft  (" + fmtNum(sqft / 43560, 2) + " acres)";
+        ro.style.display = "flex";
+        document.getElementById("share").style.display = "block";
+        document.getElementById("clearDraw").style.display = "block";
+      } else {
+        ro.style.display = "none";
+        document.getElementById("share").style.display = "none";
+        document.getElementById("clearDraw").style.display = "none";
+      }
     }
+
+    function setDrawnLayer(layer) {
+      drawnItems.clearLayers();
+      drawnLayer = layer;
+      drawnItems.addLayer(layer);
+      setDrawReadout();
+      updateUrlHash();
+    }
+
+    map.on(L.Draw.Event.CREATED, (e) => { setDrawnLayer(e.layer); });
+    map.on(L.Draw.Event.EDITED, () => { setDrawReadout(); updateUrlHash(); });
+    map.on(L.Draw.Event.DELETED, () => {
+      drawnLayer = null; setDrawReadout();
+      history.replaceState(null, "", location.pathname + location.search);
+    });
+
+    // ---- URL-based sharing: encode the drawn polygon into the hash ----
+    function updateUrlHash() {
+      if (!drawnLayer) return;
+      const ring = layerToLatLngs(drawnLayer).map(
+        ([a, b]) => [Number(a.toFixed(6)), Number(b.toFixed(6))]
+      );
+      const region = document.getElementById("region").value;
+      const payload = { p: ring, r: region };
+      const encoded = encodeURIComponent(btoa(JSON.stringify(payload)));
+      history.replaceState(null, "", location.pathname + location.search + "#poly=" + encoded);
+    }
+
+    function restoreFromHash() {
+      const h = location.hash || "";
+      const m = h.match(/poly=([^&]+)/);
+      if (!m) return false;
+      try {
+        const payload = JSON.parse(atob(decodeURIComponent(m[1])));
+        const ring = payload.p;
+        if (!Array.isArray(ring) || ring.length < 3) return false;
+        const latlngs = ring.map((p) => L.latLng(p[0], p[1]));
+        const layer = L.polygon(latlngs, { color: "#19c3b2", weight: 2 });
+        setDrawnLayer(layer);
+        map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+        if (payload.r) document.getElementById("region").value = payload.r;
+        setMode("draw");
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // ---- Mode switching ----
+    function setMode(m) {
+      mode = m;
+      document.querySelectorAll("#modeTabs button").forEach((b) =>
+        b.classList.toggle("active", b.dataset.mode === m)
+      );
+      document.getElementById("manualFields").style.display = m === "manual" ? "block" : "none";
+      document.getElementById("modeHint").textContent =
+        m === "manual"
+          ? "Enter raw coordinates and footprint directly (no address needed)."
+          : "Use the polygon or rectangle tool on the map to outline the footprint. Area is computed geodesically.";
+      if (m === "manual") {
+        const lat = parseFloat(document.getElementById("lat").value);
+        const lng = parseFloat(document.getElementById("lng").value);
+        if (!isNaN(lat) && !isNaN(lng)) updateManualMarker(lat, lng);
+      } else if (manualMarker) {
+        map.removeLayer(manualMarker); manualMarker = null;
+      }
+    }
+    function updateManualMarker(lat, lng) {
+      if (!manualMarker) manualMarker = L.marker([lat, lng]).addTo(map);
+      else manualMarker.setLatLng([lat, lng]);
+      map.setView([lat, lng], 15);
+    }
+    document.querySelectorAll("#modeTabs button").forEach((b) =>
+      b.addEventListener("click", () => setMode(b.dataset.mode))
+    );
+    ["lat", "lng"].forEach((id) =>
+      document.getElementById(id).addEventListener("change", () => {
+        const lat = parseFloat(document.getElementById("lat").value);
+        const lng = parseFloat(document.getElementById("lng").value);
+        if (!isNaN(lat) && !isNaN(lng)) updateManualMarker(lat, lng);
+      })
+    );
+    document.getElementById("region").addEventListener("change", updateUrlHash);
+    document.getElementById("clearDraw").addEventListener("click", () => {
+      drawnItems.clearLayers(); drawnLayer = null; setDrawReadout();
+      history.replaceState(null, "", location.pathname + location.search);
+    });
+    document.getElementById("share").addEventListener("click", async () => {
+      updateUrlHash();
+      try {
+        await navigator.clipboard.writeText(location.href);
+        const btn = document.getElementById("share");
+        const old = btn.textContent;
+        btn.textContent = "Link copied to clipboard"; btn.classList.add("copied");
+        setTimeout(() => { btn.textContent = old; btn.classList.remove("copied"); }, 1800);
+      } catch (e) {
+        prompt("Copy this shareable link:", location.href);
+      }
+    });
+
+    // ---- Rendering ----
+    function barRow(label, value, max, badgeHtml) {
+      const pct = max > 0 ? Math.max(2, Math.min(100, (value / max) * 100)) : 0;
+      return `<tr>
+        <td>${label}${badgeHtml || ""}</td>
+        <td class="num">
+          <div class="bar-wrap">
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+            <span>${fmtUSD(value)}</span>
+          </div>
+        </td></tr>`;
+    }
+    const badge = (kind, text) => `<span class="badge ${kind}">${text}</span>`;
 
     function render(r) {
       const copperLive = r.metals_status.ok;
-      const copperCostCell = copperLive
-        ? fmtUSD(r.copper_cost_usd)
-        : "excluded";
+      const cap = r.capacity || {};
+      const areaLabel = r.area_source === "drawn_polygon"
+        ? badge("live", "FROM DRAWN AREA")
+        : badge("static", "MANUAL");
+
+      // Value components for the comparative bars (copper may be excluded).
+      const comps = [
+        ["Shell / base-building cost", r.shell_cost_usd, badge("benchmark", "BENCHMARK $/sqft")],
+        ["Land value", r.land_value_usd, badge("proxy", "REGIONAL PROXY")],
+        ["Steel cost", r.steel_cost_usd, badge("static", "STATIC PRICE")],
+      ];
+      if (copperLive) comps.push(["Copper cost", r.copper_cost_usd, badge("live", "LIVE PRICE")]);
+      const maxComp = Math.max(...comps.map((c) => c[1] || 0), 1);
 
       let rentcastRow = "";
       if (r.rentcast.ok) {
-        rentcastRow = `<tr><td>RentCast AVM (secondary, address-matched) ${badge(
-          "live",
-          "LIVE"
-        )}</td><td class="num">${fmtUSD(r.rentcast.value_usd)}</td></tr>`;
+        rentcastRow = `<tr><td>RentCast AVM (secondary) ${badge("live", "LIVE")}</td>
+          <td class="num">${fmtUSD(r.rentcast.value_usd)}</td></tr>`;
       }
 
-      let html = `
-      <h2>Estimate</h2>
-      <table>
-        <tr><td class="section-label" colspan="2">Implied capacity &amp; quantities</td></tr>
-        <tr><td>Implied power capacity ${badge("static", "ASSUMPTION")}</td><td class="num">${fmtNum(
-        r.implied_mw,
-        1
-      )} MW</td></tr>
-        <tr><td>Parcel size (from footprint)</td><td class="num">${fmtNum(r.acres, 2)} acres</td></tr>
-        <tr><td>Steel required ${badge("static", "BENCHMARK")}</td><td class="num">${fmtNum(
-        r.steel_tonnes
-      )} t</td></tr>
-        <tr><td>Copper (facility-only)</td><td class="num">${fmtNum(
-        r.copper_tonnes_facility
-      )} t</td></tr>
-        <tr><td>Copper (incl. near-site power) ${badge("static", "BENCHMARK")}</td><td class="num">${fmtNum(
-        r.copper_tonnes_with_grid
-      )} t</td></tr>
-        <tr><td>Concrete (context only, not priced)</td><td class="num">${fmtNum(
-        r.concrete_m3
-      )} m³ / ${fmtNum(r.concrete_tonnes)} t</td></tr>
+      const html = `
+        <div class="headline">
+          <div class="cell">
+            <div class="k">Total implied site value today</div>
+            <div class="v">${fmtUSD(r.total_site_value_usd)}</div>
+          </div>
+        </div>
 
-        <tr><td class="section-label" colspan="2">Value breakdown (USD)</td></tr>
-        <tr><td>Land value ${badge("proxy", "REGIONAL PROXY")}</td><td class="num">${fmtUSD(
-        r.land_value_usd
-      )}</td></tr>
-        ${rentcastRow}
-        <tr><td>Steel cost ${badge("static", "STATIC PRICE")}</td><td class="num">${fmtUSD(
-        r.steel_cost_usd
-      )}</td></tr>
-        <tr><td>Copper cost ${
-          copperLive ? badge("live", "LIVE PRICE") : badge("static", "NO KEY")
-        }</td><td class="num">${copperCostCell}</td></tr>
-        <tr><td>Total material cost</td><td class="num">${fmtUSD(r.material_cost_usd)}</td></tr>
+        <div class="metric-grid">
+          <div class="m"><div class="k">Footprint ${areaLabel}</div><div class="v">${fmtNum(r.sqft)} <small>sq ft</small></div></div>
+          <div class="m"><div class="k">Parcel size</div><div class="v">${fmtNum(r.acres, 2)} <small>acres</small></div></div>
+          <div class="m"><div class="k">Implied power</div><div class="v">${fmtNum(r.implied_mw, 1)} <small>MW</small></div></div>
+          <div class="m"><div class="k">Est. racks</div><div class="v">${fmtNum(cap.estimated_racks)}</div></div>
+          <div class="m"><div class="k">Avg density</div><div class="v">${fmtNum(cap.avg_kw_per_rack, 1)} <small>kW/rack</small></div></div>
+          <div class="m"><div class="k">Steel</div><div class="v">${fmtNum(r.steel_tonnes)} <small>t</small></div></div>
+        </div>
 
-        <tr class="total"><td>Total implied site value today</td><td class="num">${fmtUSD(
-        r.total_site_value_usd
-      )}</td></tr>
-      </table>
+        <div class="panel-title">Value breakdown (USD)</div>
+        <table>
+          ${comps.map((c) => barRow(c[0], c[1], maxComp, c[2])).join("")}
+          ${rentcastRow}
+          ${!copperLive ? `<tr><td>Copper cost ${badge("static", "NO LIVE PRICE")}</td><td class="num">excluded</td></tr>` : ""}
+          <tr class="total"><td>Total implied site value</td><td class="num">${fmtUSD(r.total_site_value_usd)}</td></tr>
+        </table>
 
-      <div class="status-line">
-        <strong>Commodity pricing:</strong> ${r.metals_status.ok ? "LIVE" : "unavailable"} —
-        ${r.metals_status.source}${
-        r.metals_status.message ? " — " + r.metals_status.message : ""
-      }<br/>
-        <strong>Land:</strong> ${r.price_sources.land}<br/>
-        <strong>Steel:</strong> ${r.price_sources.steel}<br/>
-        <strong>Copper:</strong> ${r.price_sources.copper}
-        ${r.price_sources.aluminum ? "<br/><strong>Aluminum:</strong> " + r.price_sources.aluminum : ""}
-        ${!r.rentcast.ok ? "<br/><strong>RentCast:</strong> " + r.rentcast.message : ""}
-      </div>
+        <div class="panel-title">Capacity &amp; cooling (indicative)</div>
+        <table>
+          <tr><td>Estimated server racks</td><td class="num">${fmtNum(cap.estimated_racks)}</td></tr>
+          <tr><td>Usable white space (@ ${fmtNum((cap.white_space_fraction || 0) * 100)}% of gross)</td><td class="num">${fmtNum(cap.white_space_sqft)} sq ft</td></tr>
+          <tr><td>Implied average density</td><td class="num">${fmtNum(cap.avg_kw_per_rack, 1)} kW/rack</td></tr>
+          <tr><td>Typical cooling method</td><td class="num"><span class="cool-chip">${cap.cooling_method || "n/a"}</span></td></tr>
+        </table>
+        <p class="note">${cap.cooling_detail || ""}</p>
 
-      <p class="note" style="margin-top:12px;"><a href="${r.google_maps_url}" target="_blank" rel="noopener">Open in Google Maps ↗</a></p>
+        <div class="panel-title">Materials intensity</div>
+        <table>
+          <tr><td>Steel required ${badge("benchmark", "BENCHMARK")}</td><td class="num">${fmtNum(r.steel_tonnes)} t</td></tr>
+          <tr><td>Copper (facility-only)</td><td class="num">${fmtNum(r.copper_tonnes_facility)} t</td></tr>
+          <tr><td>Copper (incl. near-site power) ${badge("benchmark", "BENCHMARK")}</td><td class="num">${fmtNum(r.copper_tonnes_with_grid)} t</td></tr>
+          <tr><td>Concrete (context only, not priced)</td><td class="num">${fmtNum(r.concrete_m3)} m³ / ${fmtNum(r.concrete_tonnes)} t</td></tr>
+        </table>
 
-      <div class="disclaimer">
-        Benchmarks are documented in SOURCES.md. Land value is a <strong>regional average proxy, not a
-        parcel-level appraisal</strong>. Power capacity is an assumption from a fixed W/sq ft density.
-        Steel is priced from a static benchmark (not on the live metals feed). Concrete is shown for
-        context and is not priced into the total.
-      </div>`;
+        <div class="provenance">
+          <div class="line"><strong>Commodity pricing:</strong> ${r.metals_status.ok ? "LIVE" : "unavailable"} — ${r.metals_status.source}${r.metals_status.message ? " — " + r.metals_status.message : ""}</div>
+          <div class="line"><strong>Shell cost:</strong> ${r.price_sources.shell}</div>
+          <div class="line"><strong>Land:</strong> ${r.price_sources.land}</div>
+          <div class="line"><strong>Steel:</strong> ${r.price_sources.steel}</div>
+          <div class="line"><strong>Copper:</strong> ${r.price_sources.copper}</div>
+          ${r.price_sources.aluminum ? `<div class="line"><strong>Aluminum:</strong> ${r.price_sources.aluminum}</div>` : ""}
+          ${!r.rentcast.ok ? `<div class="line"><strong>RentCast:</strong> ${r.rentcast.message}</div>` : ""}
+        </div>
+
+        <p class="note" style="margin-top:12px;"><a href="${r.google_maps_url}" target="_blank" rel="noopener">Open coordinates in Google Maps ↗</a></p>
+
+        <div class="disclaimer">
+          Benchmarks are documented in SOURCES.md. <strong>Shell cost is a base-building $/sq ft benchmark that
+          deliberately EXCLUDES the IT power / electrical / mechanical chain</strong> (already captured via the
+          MW / copper / steel figures) to avoid double-counting. Land value is a <strong>regional average proxy,
+          not a parcel-level appraisal</strong>. Rack count and cooling method are indicative rules of thumb.
+          Concrete is shown for context and not priced into the total.
+        </div>`;
       document.getElementById("output").innerHTML = html;
     }
 
@@ -266,12 +535,22 @@
       const btn = document.getElementById("go");
       const errEl = document.getElementById("err");
       errEl.textContent = "";
-      const lat = parseFloat(document.getElementById("lat").value);
-      const lng = parseFloat(document.getElementById("lng").value);
-      const sqft = parseFloat(document.getElementById("sqft").value);
       const region = document.getElementById("region").value;
 
-      if (!isNaN(lat) && !isNaN(lng)) updateMap(lat, lng);
+      let body = { region };
+      if (mode === "draw") {
+        if (!drawnLayer) {
+          errEl.textContent = "Draw a parcel on the map first (polygon or rectangle tool), or switch to manual entry.";
+          return;
+        }
+        body.polygon = layerToLatLngs(drawnLayer).map(([a, b]) => [a, b]);
+      } else {
+        const lat = parseFloat(document.getElementById("lat").value);
+        const lng = parseFloat(document.getElementById("lng").value);
+        const sqft = parseFloat(document.getElementById("sqft").value);
+        if (!isNaN(lat) && !isNaN(lng)) updateManualMarker(lat, lng);
+        body = { ...body, lat, lng, sqft };
+      }
 
       btn.disabled = true;
       btn.textContent = "Estimating…";
@@ -279,14 +558,11 @@
         const resp = await fetch("/api/estimate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat, lng, sqft, region }),
+          body: JSON.stringify(body),
         });
         const data = await resp.json();
-        if (!resp.ok) {
-          errEl.textContent = data.error || "Something went wrong.";
-        } else {
-          render(data);
-        }
+        if (!resp.ok) errEl.textContent = data.error || "Something went wrong.";
+        else render(data);
       } catch (e) {
         errEl.textContent = "Network error: " + e.message;
       } finally {
@@ -296,14 +572,12 @@
     }
 
     document.getElementById("go").addEventListener("click", run);
-    // Live-preview the map as coordinates change.
-    ["lat", "lng"].forEach((id) =>
-      document.getElementById(id).addEventListener("change", () => {
-        const lat = parseFloat(document.getElementById("lat").value);
-        const lng = parseFloat(document.getElementById("lng").value);
-        if (!isNaN(lat) && !isNaN(lng)) updateMap(lat, lng);
-      })
-    );
+
+    // On load: restore a shared parcel from the URL hash if present.
+    setMode("draw");
+    if (restoreFromHash()) {
+      run(); // auto-run so a shared link immediately shows the same estimate
+    }
   </script>
 </body>
 </html>

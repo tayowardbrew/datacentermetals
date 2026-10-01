@@ -5,7 +5,7 @@ below with the figure used, the source, a URL, and the date it was last verified
 Where I could not find a strong primary source, that is stated explicitly rather than
 presenting a guess as fact.
 
-**Last verified for all entries below: 2026-09-23**
+**Last verified for all entries below: 2026-09-23** (entries 9-11 added and verified 2026-09-30).
 
 > Note on primary vs secondary sources: several of these benchmarks originate in
 > paywalled or subscription industry reports (BloombergNEF, Cushman & Wakefield,
@@ -161,3 +161,123 @@ presenting a guess as fact.
   quote, because steel is not on the metals API free tier. It is labeled as such
   everywhere it appears. A user should update it against a current source (e.g.
   SteelBenchmarker, CME HRC futures) before relying on the steel line item.
+
+## 9. Shell / base-building construction cost (excludes power / electrical / mechanical)
+
+- **Figure used:** Shell / core-and-shell + architecture = **14% of total
+  construction (hard) cost**, applied to an all-in build cost of **$11M per MW of
+  IT capacity**. That gives ~**$1.54M/MW** of shell cost, which the tool multiplies
+  by the implied MW. (The implied $/sq ft therefore floats with the power-density
+  assumption; at 250 W/sq ft it works out to roughly $385/sq ft of shell.)
+- **Why a % of total, not a bare $/sq ft:** the only shell-only $/sq ft figures I
+  could find were from secondary trade/blog sources that disagreed badly with each
+  other ($80-160/sq ft vs $250-400/sq ft, reflecting different definitions of
+  "shell"). The well-sourced quantity is the *relationship* — the shell/core share
+  of total construction cost from a recognised benchmark house — so the tool uses
+  that against a sourced all-in $/MW anchor instead of hard-coding a weak $/sq ft.
+- **Range in the literature:** shell/powered-shell portion ~9-20% of total
+  construction cost. Turner & Townsend put core/shell + architecture at **14% for an
+  air-cooled facility and 9% for a liquid-cooled AI facility** (the rest being
+  mechanical ~22-33% and electrical ~48-54%, plus ~10% GC fees). The 14% air-cooled
+  figure is used as the default. All-in build cost anchor: ~$10-12M/MW US standard
+  build (JLL ~$11.3M/MW global average 2026); AI/liquid builds run far higher
+  ($17-25M/MW).
+- **Source:** Turner & Townsend, *Data Centre Construction Cost Index 2025 /
+  2025-2026* (cost-trends section, with the explicit air- vs liquid-cooled
+  percentage split) for the 14%/9% shell share; JLL *2026 Global Data Center
+  Outlook* for the ~$11.3M/MW all-in anchor.
+- **URLs:**
+  - https://reports.turnerandtownsend.com/data-centre-construction-cost-index-2025/data-centre-cost-trends
+  - https://www.turnerandtownsend.com/insights/data-centre-construction-cost-index-2025-2026/
+  - JLL $11.3M/MW figure (cited via Global Data Center Hub synthesis): https://www.globaldatacenterhub.com/p/what-a-data-center-actually-costs
+- **Honesty note (IMPORTANT):** This cost line **deliberately EXCLUDES the IT power
+  chain, electrical and mechanical plant**, because those are already captured in
+  this tool via the implied-MW / copper / steel figures — bundling M&E into the
+  shell line would double-count. The 14% T&T figure is "core/shell + architecture"
+  as a share of *construction hard cost* (it excludes land, soft costs and IT
+  equipment), which is exactly the shell-vs-M&E separation wanted here, though note
+  it bundles architecture in with structural shell, so it is marginally broader than
+  pure structural shell. The $11.3M/MW all-in anchor is a JLL figure reached via a
+  secondary synthesis source, not the JLL report directly — flagged as secondary.
+  Both the % and the $/MW anchor are configurable in `estimator.py`.
+
+## 10. Rack capacity — white-space ratio, sq ft per rack, implied kW/rack
+
+- **Figures used:**
+  - **White space = 45% of gross building area** (midpoint of a sourced 40-50%
+    band). Racks are counted from white space, not gross area.
+  - **20 sq ft of white space per rack** (standard planning default incl. aisle
+    allowance; range 15-25 for air-cooled).
+  - **Average kW/rack is then implied** by dividing the tool's implied total IT
+    power by the estimated rack count — it is a *derived* figure, not an input, so
+    it is internally consistent with the power-density assumption.
+- **Range in the literature:**
+  - White space as a share of gross internal area: **40-50%** (RICS), with external
+    plant/support space often 30%+ of GIA on top.
+  - sq ft per rack: 12-25 (12-15 for dense/liquid layouts, 15-25 air-cooled);
+    ~50 racks per 1,000 sq ft of white space.
+  - Observed operating rack density for context: Uptime Institute modal **~11
+    kW/rack (2026 survey)**; AFCOM reports a much higher self-selected-member
+    *design* average **~27 kW/rack (2026)**; high-density AI racks 50-130 kW. The
+    Uptime vs AFCOM gap is definitional (operating vs design, broad vs AI-leaning
+    population), not an error.
+- **Source:**
+  - White-space ratio: **RICS Construction Journal, Robert Nicholson MRICS (10 Jul
+    2024)** — "net data hall / white space is generally 40-50% of gross internal
+    area, excluding office blocks." (Best-sourced figure here — professional body,
+    named chartered author.)
+  - sq ft/rack and racks/1,000 sq ft: Obel Insights, "Data Center Capacity Math"
+    (industry rule of thumb; secondary trade source).
+  - Density context: Uptime Institute Global Data Center Survey and AFCOM State of
+    the Data Center 2026, reported via Data Center Knowledge.
+- **URLs:**
+  - https://ww3.rics.org/uk/en/journals/construction-journal/data-centre-demand-retrofit.html
+  - https://obelinf.com/blog/data-center-capacity-math-kw-per-square-foot-vs-kw-per-rack/
+  - https://www.datacenterknowledge.com/ai-data-centers/ai-drives-data-center-uncertainty-in-uptime-s-2026-survey
+  - https://www.datacenterknowledge.com/data-center-construction/afcom-rack-density-and-build-outs-surge-as-ai-overhauls-data-center-design
+- **Honesty note:** The RICS white-space ratio is well-sourced; the sq ft/rack
+  figure is a widely-consistent industry rule of thumb from a trade source, flagged
+  as such. The rack count is INDICATIVE: real layouts vary with cabinet size,
+  density, aisle width and liquid-vs-air design. The sq ft/rack figure is applied to
+  *white space* (after the 40-50% ratio), not to gross area directly. The 2026
+  Uptime/AFCOM density numbers are shown only as context and are reported via trade
+  press rather than the (paywalled) primary survey PDFs.
+
+## 11. Cooling method by rack density (indicative tiered rule)
+
+- **Figures used (defensible bands, keyed on the implied average kW/rack):**
+
+  | Implied density | Typical cooling |
+  |-----------------|-----------------|
+  | < ~20 kW/rack   | Air cooling (CRAC/CRAH), raised floor, hot/cold-aisle containment |
+  | ~20-30 kW/rack  | Air at its ceiling: full containment + rear-door heat exchangers / in-row |
+  | ~30-50 kW/rack  | Direct-to-chip (cold-plate) liquid cooling |
+  | > ~50 kW/rack   | Direct-to-chip at scale and/or immersion (dense AI/HPC) |
+
+- **Range in the literature:** the air-to-liquid transition is cited anywhere from
+  ~20 kW (ASHRAE, conservative) to 40-50 kW (airflow hard limit); immersion
+  threshold ~50 kW+; air hard ceiling ~80-100 kW/rack.
+- **Source:**
+  - **ASHRAE TC 9.9** (governing thermal-guidelines body): air becomes insufficient
+    beyond ~20-25 kW/rack; the H1 high-density class (>20 kW) was added in the 5th
+    edition (2021); direct liquid cooling recommended above ~20-30 kW/rack. The
+    ~20 kW threshold is the most authoritative single number here.
+  - **Schneider Electric White Paper #282**, "Capital Cost Analysis of Immersive
+    Liquid-Cooled vs Air-Cooled Large Data Centres" (2020): capex parity ~10 kW,
+    liquid saves ~10% at 20 kW, ~14% at 40 kW — the canonical cost-crossover
+    citation.
+  - Higher-band edges (30/50 kW) from vendor/trade consensus (Schneider, Vertiv,
+    Introl, NRI Globe).
+- **URLs:**
+  - https://www.simscale.com/blog/ashrae-90-4-data-center-standards/
+  - https://greencalculus.com/standards/ashrae-tc-9-9-thermal-guidelines/
+  - https://www.prnewswire.com/news-releases/schneider-electric-releases-white-paper-on-capital-cost-comparison-of-data-centre-liquid-cooling-vs-traditional-air-cooling-301086834.html
+  - https://nriglobe.com/technology/ai-data-center-cooling-methods-2026-air-direct-to-chip-liquid-immersion-pue-nvidia-gb200-rack-density-explained/
+- **Honesty note:** The ~20 kW ASHRAE air→liquid threshold is the best-anchored
+  number (reached via secondary explainers, since the TC 9.9 guidelines themselves
+  are paywalled). The higher band edges (30, 50 kW) are defensible industry
+  consensus assembled from several vendor/trade sources, NOT one definitive
+  standard, and are presented as rule-of-thumb bands, not hard specs. The cooling
+  method is labelled INDICATIVE throughout the UI. A separately-researched Vertiv
+  liquid-cooling white paper was deliberately NOT cited because its internal
+  thresholds could not be verified from the source document.

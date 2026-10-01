@@ -12,6 +12,8 @@ logic stays testable and deterministic.
 
 from dataclasses import dataclass, field, asdict
 
+from capacity import estimate_capacity
+
 # --- Benchmark assumptions (see SOURCES.md for provenance) ---
 
 # Power density (watts per square foot of building space). Mid-range of the
@@ -38,6 +40,20 @@ CONCRETE_TONNES_PER_M3 = 2.4
 # Static steel price (USD per metric ton). NOT a live quote: steel is not on the
 # Metals.Dev free tier. Generic US structural/HRC benchmark. Source: SOURCES.md.
 STATIC_STEEL_PRICE_USD_PER_TONNE = 900.0
+
+# Shell / base-building construction cost, EXCLUDING the IT power chain /
+# electrical / mechanical plant — i.e. land improvement, foundation, structural
+# core & shell and architecture only. The power/M&E side is already captured via
+# the MW / copper / steel figures, so including M&E here would double-count.
+#
+# Rather than hard-code a bare $/sq ft (which only weak, mutually-inconsistent
+# blog sources give for shell-only), we derive shell cost from the well-sourced
+# RELATIONSHIP: Turner & Townsend's cost split puts core/shell + architecture at
+# ~14% of total construction (hard) cost for an air-cooled facility, with
+# mechanical+electrical the remaining majority. We apply that 14% to a sourced
+# all-in build cost of ~$11M per MW of IT capacity (JLL). See SOURCES.md.
+TOTAL_BUILD_COST_USD_PER_MW = 11_000_000.0
+SHELL_SHARE_OF_BUILD = 0.14
 
 # Regional average commercial/industrial land price (USD per acre).
 # Generic industrial land proxy, NOT power-ready data-center-premium land.
@@ -116,7 +132,11 @@ class Estimate:
     steel_cost_usd: float = 0.0
     copper_cost_usd: float = 0.0
     material_cost_usd: float = 0.0
+    shell_cost_usd: float = 0.0
     total_site_value_usd: float = 0.0
+
+    # Capacity / cooling (indicative) — populated from capacity.py
+    capacity: dict = field(default_factory=dict)
 
     # Metadata / labels / honesty flags
     google_maps_url: str = ""
@@ -193,9 +213,34 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
             f"via {aluminum_price_source} (reference only; no v1 intensity figure)."
         )
 
-    # Totals
+    # Shell / base-building construction cost (excludes the power/M&E chain, which
+    # is already captured by the MW / copper / steel figures — including M&E here
+    # would double-count). Derived as the sourced shell share (~14%) of a sourced
+    # all-in $/MW build cost, applied to the implied MW. Labelled as a benchmark-
+    # derived figure, not a live quote.
+    shell_cost_per_mw = TOTAL_BUILD_COST_USD_PER_MW * SHELL_SHARE_OF_BUILD
+    est.shell_cost_usd = est.implied_mw * shell_cost_per_mw
+    implied_shell_per_sqft = (
+        est.shell_cost_usd / sqft if sqft else 0.0
+    )
+    est.price_sources["shell"] = (
+        f"BENCHMARK: shell / core & shell + architecture only, derived as "
+        f"{SHELL_SHARE_OF_BUILD:.0%} (Turner & Townsend cost split) of a "
+        f"${TOTAL_BUILD_COST_USD_PER_MW/1e6:,.0f}M/MW all-in build cost (JLL) = "
+        f"${shell_cost_per_mw/1e6:,.2f}M/MW (~${implied_shell_per_sqft:,.0f}/sq ft "
+        f"here). EXCLUDES the IT power / electrical / mechanical chain to avoid "
+        f"double-counting with the copper/steel/MW figures. See SOURCES.md."
+    )
+
+    # Indicative rack-capacity and cooling characterisation (not priced).
+    est.capacity = estimate_capacity(sqft, est.implied_mw).to_dict()
+
+    # Totals. Headline total = land + priced materials (steel + copper) + shell
+    # base-building cost.
     est.material_cost_usd = est.steel_cost_usd + est.copper_cost_usd
-    est.total_site_value_usd = est.land_value_usd + est.material_cost_usd
+    est.total_site_value_usd = (
+        est.land_value_usd + est.material_cost_usd + est.shell_cost_usd
+    )
 
     est.google_maps_url = f"https://www.google.com/maps?q={lat},{lng}"
 
