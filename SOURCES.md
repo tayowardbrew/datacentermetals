@@ -164,42 +164,54 @@ presenting a guess as fact.
 
 ## 9. Shell / base-building construction cost (excludes power / electrical / mechanical)
 
-- **Figure used:** Shell / core-and-shell + architecture = **14% of total
-  construction (hard) cost**, applied to an all-in build cost of **$11M per MW of
-  IT capacity**. That gives ~**$1.54M/MW** of shell cost, which the tool multiplies
-  by the implied MW. (The implied $/sq ft therefore floats with the power-density
-  assumption; at 250 W/sq ft it works out to roughly $385/sq ft of shell.)
-- **Why a % of total, not a bare $/sq ft:** the only shell-only $/sq ft figures I
+- **Figure used:** Shell / core-and-shell + architecture = **$1.5M per MW of IT
+  capacity**, multiplied by the tool's implied MW. (The implied $/sq ft therefore
+  floats with the power-density assumption; at 250 W/sq ft it works out to roughly
+  $375/sq ft of shell.) $1.5M/MW sits in the middle of the sourced shell-and-core
+  band and is ~12% of a typical all-in hard cost — consistent with the shell/core
+  share benchmarks below.
+- **Why priced per MW, not a bare $/sq ft:** the only shell-only $/sq ft figures I
   could find were from secondary trade/blog sources that disagreed badly with each
   other ($80-160/sq ft vs $250-400/sq ft, reflecting different definitions of
-  "shell"). The well-sourced quantity is the *relationship* — the shell/core share
-  of total construction cost from a recognised benchmark house — so the tool uses
-  that against a sourced all-in $/MW anchor instead of hard-coding a weak $/sq ft.
-- **Range in the literature:** shell/powered-shell portion ~9-20% of total
-  construction cost. Turner & Townsend put core/shell + architecture at **14% for an
-  air-cooled facility and 9% for a liquid-cooled AI facility** (the rest being
-  mechanical ~22-33% and electrical ~48-54%, plus ~10% GC fees). The 14% air-cooled
-  figure is used as the default. All-in build cost anchor: ~$10-12M/MW US standard
-  build (JLL ~$11.3M/MW global average 2026); AI/liquid builds run far higher
-  ($17-25M/MW).
+  "shell"). The better-sourced quantities are (a) the shell-and-core cost *per MW*
+  and (b) the shell/core *share* of total construction cost from recognised
+  benchmark houses, so the tool prices shell cost per implied MW within that band.
+- **Range in the literature:**
+  - **Shell-and-core cost per MW:** ~**$1.0-2.1M/MW** for an air-cooled facility.
+    JLL's figure for a single-tenant ~50 MW air-cooled build puts **shell-and-core
+    at ~$11.3M per MW is a SCOPE ERROR to avoid** — see the honesty note; the widely
+    quoted ~$11.3M/MW is a *total* construction figure, and the shell-and-core slice
+    of that is the ~12-15% / ~$1.0-2.1M/MW band used here.
+  - **Shell/core share of total construction (hard) cost:** ~9-20%. Turner &
+    Townsend put core/shell + architecture at **14% for an air-cooled facility and
+    9% for a liquid-cooled AI facility** (the rest being mechanical ~22-33% and
+    electrical ~48-54%, plus ~10% GC fees). Global Data Center Hub's synthesis puts
+    shell-and-site at ~12-15% of hard cost ≈ $1.0-2.1M/MW. $1.5M/MW is the mid-band.
+  - All-in air-cooled hard cost for context: ~$10-14M/MW (AI/liquid builds run far
+    higher, $17-25M/MW).
 - **Source:** Turner & Townsend, *Data Centre Construction Cost Index 2025 /
-  2025-2026* (cost-trends section, with the explicit air- vs liquid-cooled
-  percentage split) for the 14%/9% shell share; JLL *2026 Global Data Center
-  Outlook* for the ~$11.3M/MW all-in anchor.
+  2025-2026* (air- vs liquid-cooled percentage split) for the 14%/9% shell share;
+  Global Data Center Hub cost synthesis (citing JLL) for the shell-and-site $/MW
+  band and the all-in anchor.
 - **URLs:**
   - https://reports.turnerandtownsend.com/data-centre-construction-cost-index-2025/data-centre-cost-trends
   - https://www.turnerandtownsend.com/insights/data-centre-construction-cost-index-2025-2026/
-  - JLL $11.3M/MW figure (cited via Global Data Center Hub synthesis): https://www.globaldatacenterhub.com/p/what-a-data-center-actually-costs
+  - https://www.globaldatacenterhub.com/p/what-a-data-center-actually-costs
 - **Honesty note (IMPORTANT):** This cost line **deliberately EXCLUDES the IT power
   chain, electrical and mechanical plant**, because those are already captured in
-  this tool via the implied-MW / copper / steel figures — bundling M&E into the
-  shell line would double-count. The 14% T&T figure is "core/shell + architecture"
-  as a share of *construction hard cost* (it excludes land, soft costs and IT
-  equipment), which is exactly the shell-vs-M&E separation wanted here, though note
-  it bundles architecture in with structural shell, so it is marginally broader than
-  pure structural shell. The $11.3M/MW all-in anchor is a JLL figure reached via a
-  secondary synthesis source, not the JLL report directly — flagged as secondary.
-  Both the % and the $/MW anchor are configurable in `estimator.py`.
+  this tool via the implied-MW / copper / steel figures — bundling M&E (the dominant
+  ~70-85% of construction cost) into the shell line would double-count. The T&T "core/
+  shell + architecture" category is a share of *construction hard cost* (it excludes
+  land, soft costs and IT equipment), which is exactly the shell-vs-M&E separation
+  wanted here, though note it bundles architecture in with structural shell, so it is
+  marginally broader than pure structural shell. **Scope caveat (corrected after an
+  independent review):** the commonly-cited JLL ~$11.3M/MW figure is a *shell-and-
+  core per-MW* number for a specific single-tenant ~50 MW air-cooled facility in some
+  write-ups and a *total* figure in others — the figure's scope is reported
+  inconsistently across secondary sources. To avoid that ambiguity the tool does NOT
+  take a percentage of it; it prices shell cost directly at $1.5M/MW within the
+  sourced ~$1.0-2.1M/MW shell-and-core band. The $/MW figure is configurable in
+  `estimator.py` (`SHELL_COST_USD_PER_MW`).
 
 ## 10. Rack capacity — white-space ratio, sq ft per rack, implied kW/rack
 

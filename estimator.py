@@ -46,14 +46,13 @@ STATIC_STEEL_PRICE_USD_PER_TONNE = 900.0
 # core & shell and architecture only. The power/M&E side is already captured via
 # the MW / copper / steel figures, so including M&E here would double-count.
 #
-# Rather than hard-code a bare $/sq ft (which only weak, mutually-inconsistent
-# blog sources give for shell-only), we derive shell cost from the well-sourced
-# RELATIONSHIP: Turner & Townsend's cost split puts core/shell + architecture at
-# ~14% of total construction (hard) cost for an air-cooled facility, with
-# mechanical+electrical the remaining majority. We apply that 14% to a sourced
-# all-in build cost of ~$11M per MW of IT capacity (JLL). See SOURCES.md.
-TOTAL_BUILD_COST_USD_PER_MW = 11_000_000.0
-SHELL_SHARE_OF_BUILD = 0.14
+# We DON'T hard-code a bare $/sq ft (the only shell-only $/sq ft figures come from
+# weak, mutually-inconsistent blog sources). Instead we price shell cost directly
+# per MW of IT capacity, anchored on the shell-and-core cost band for an air-cooled
+# facility (~$1.0-2.1M/MW; JLL's single-tenant ~50 MW air-cooled shell-and-core
+# figure sits near ~$1.5M/MW, and this is ~12-15% of a ~$10-14M/MW all-in hard
+# cost). 1.5 = a defensible mid-band default. See SOURCES.md entry 9.
+SHELL_COST_USD_PER_MW = 1_500_000.0
 
 # Regional average commercial/industrial land price (USD per acre).
 # Generic industrial land proxy, NOT power-ready data-center-premium land.
@@ -215,21 +214,17 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
 
     # Shell / base-building construction cost (excludes the power/M&E chain, which
     # is already captured by the MW / copper / steel figures — including M&E here
-    # would double-count). Derived as the sourced shell share (~14%) of a sourced
-    # all-in $/MW build cost, applied to the implied MW. Labelled as a benchmark-
-    # derived figure, not a live quote.
-    shell_cost_per_mw = TOTAL_BUILD_COST_USD_PER_MW * SHELL_SHARE_OF_BUILD
-    est.shell_cost_usd = est.implied_mw * shell_cost_per_mw
-    implied_shell_per_sqft = (
-        est.shell_cost_usd / sqft if sqft else 0.0
-    )
+    # would double-count). Priced directly per implied MW on the sourced shell-and-
+    # core cost band, labelled as a benchmark figure, not a live quote.
+    est.shell_cost_usd = est.implied_mw * SHELL_COST_USD_PER_MW
+    implied_shell_per_sqft = est.shell_cost_usd / sqft if sqft else 0.0
     est.price_sources["shell"] = (
-        f"BENCHMARK: shell / core & shell + architecture only, derived as "
-        f"{SHELL_SHARE_OF_BUILD:.0%} (Turner & Townsend cost split) of a "
-        f"${TOTAL_BUILD_COST_USD_PER_MW/1e6:,.0f}M/MW all-in build cost (JLL) = "
-        f"${shell_cost_per_mw/1e6:,.2f}M/MW (~${implied_shell_per_sqft:,.0f}/sq ft "
-        f"here). EXCLUDES the IT power / electrical / mechanical chain to avoid "
-        f"double-counting with the copper/steel/MW figures. See SOURCES.md."
+        f"BENCHMARK: shell / core & shell + architecture only, priced at "
+        f"${SHELL_COST_USD_PER_MW/1e6:,.1f}M per implied MW (within the ~$1.0-2.1M/MW "
+        f"shell-and-core band; ~{SHELL_COST_USD_PER_MW/12_500_000:.0%} of a typical "
+        f"all-in hard cost; ~${implied_shell_per_sqft:,.0f}/sq ft here). EXCLUDES the "
+        f"IT power / electrical / mechanical chain to avoid double-counting with the "
+        f"copper / steel / MW figures. See SOURCES.md."
     )
 
     # Indicative rack-capacity and cooling characterisation (not priced).

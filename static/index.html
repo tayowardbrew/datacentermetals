@@ -13,7 +13,7 @@
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"
-    integrity="sha256-xIhA5nFLHd1C9GSNVFoWQrLBwqgpR0JL6YXAbL8gkIE="
+    integrity="sha256-XzD3RpaHPv7lzX9qt+2n1j5cWj48O24KsgaGYpKN8x8="
     crossorigin=""
   />
   <style>
@@ -251,7 +251,7 @@
   ></script>
   <script
     src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"
-    integrity="sha256-mvQnWMc9CvQ_3MeFl2mKU4zX5jbVfbKRHgpYynHkPVY="
+    integrity="sha256-siofc4Uwjlra3YWkwthOn8Uj69cNN4aMug/iOHNiRgs="
     crossorigin=""
   ></script>
   <script>
@@ -454,7 +454,7 @@
 
       // Value components for the comparative bars (copper may be excluded).
       const comps = [
-        ["Shell / base-building cost", r.shell_cost_usd, badge("benchmark", "BENCHMARK $/sqft")],
+        ["Shell / base-building cost", r.shell_cost_usd, badge("benchmark", "BENCHMARK, EXCL. POWER")],
         ["Land value", r.land_value_usd, badge("proxy", "REGIONAL PROXY")],
         ["Steel cost", r.steel_cost_usd, badge("static", "STATIC PRICE")],
       ];

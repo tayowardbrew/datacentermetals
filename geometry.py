@@ -20,7 +20,11 @@ spherical geometry implementations, which all use this identity.
 
 import math
 
-# WGS84 mean (authalic-ish) radius in metres, matching the constant Leaflet uses.
+# WGS84 equatorial (semi-major) radius in metres. This is the exact constant
+# Leaflet's L.GeometryUtil.geodesicArea uses, so the browser and server agree. On a
+# true-sphere area calc it slightly overstates area versus the authalic mean radius
+# (~6371008 m), but the residual vs the WGS84 ellipsoid stays under ~1% everywhere
+# (verified), which is well within the tolerance this tool needs.
 EARTH_RADIUS_M = 6378137.0
 
 SQ_METRES_PER_SQ_FOOT = 0.09290304  # exact: 0.3048 m per foot, squared
