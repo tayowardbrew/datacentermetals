@@ -12,6 +12,8 @@ from flask import Flask, request, jsonify, send_from_directory
 from estimator import estimate_site, ValidationError
 from metals_client import get_metal_prices
 from land_value import get_rentcast_value
+from land_prices import lookup_land_comp
+from geocode import search_places, reverse_geocode
 from geometry import (
     parse_polygon,
     geodesic_area_sq_ft,
@@ -25,6 +27,44 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
+
+
+@app.route("/api/geocode", methods=["GET"])
+def api_geocode():
+    """Forward-geocode a free-text area/street query for the search box."""
+    q = request.args.get("q", "")
+    res = search_places(q, limit=6)
+    status = 200 if res.ok else (400 if "3 characters" in (res.message or "") else 200)
+    return jsonify(res.to_dict()), status
+
+
+@app.route("/api/detect-location", methods=["POST"])
+def api_detect_location():
+    """
+    Reverse-geocode a drawn parcel's centroid and return the auto-detected
+    land comparable (state / county-metro where available) for the user to
+    confirm or override. This is the 'confirm, don't force a dropdown' step.
+    """
+    payload = request.get_json(silent=True) or {}
+    lat = payload.get("lat")
+    lng = payload.get("lng")
+
+    polygon = payload.get("polygon")
+    if polygon is not None:
+        try:
+            pts = parse_polygon(polygon)
+            lat, lng = polygon_centroid(pts)
+        except GeometryError as e:
+            return jsonify({"error": str(e)}), 400
+
+    rev = reverse_geocode(lat, lng)
+    comp = lookup_land_comp(rev)
+    return jsonify({
+        "lat": lat,
+        "lng": lng,
+        "reverse": rev.to_dict(),
+        "land_comp": comp,
+    })
 
 
 @app.route("/api/estimate", methods=["POST"])
@@ -52,6 +92,20 @@ def api_estimate():
         sqft = polygon_area_sqft
         lat, lng = clat, clng
 
+    # --- Granular land comparable ---------------------------------------------
+    # The UI confirms/overrides an auto-detected comp. It passes back a
+    # `land_comp` block (the one it showed the user, possibly edited). If absent,
+    # we reverse-geocode here as a fallback so a direct API call still works.
+    land_comp = payload.get("land_comp")
+    if land_comp is None and lat is not None and lng is not None:
+        rev = reverse_geocode(lat, lng)
+        land_comp = lookup_land_comp(rev)
+    per_acre_override = None
+    if isinstance(land_comp, dict):
+        v = land_comp.get("usd_per_acre")
+        if isinstance(v, (int, float)) and v > 0:
+            per_acre_override = float(v)
+
     # --- Live copper/aluminum prices (graceful on missing key/network) ---
     metals = get_metal_prices()
     copper_price = metals.price("copper") if metals.ok else None
@@ -67,11 +121,15 @@ def api_estimate():
             copper_price_source=metals.source if metals.ok else metals.message,
             aluminum_price_usd_per_tonne=aluminum_price,
             aluminum_price_source=metals.source if metals.ok else metals.message,
+            land_price_per_acre_override=per_acre_override,
+            land_comp_label=(land_comp or {}).get("label") if isinstance(land_comp, dict) else None,
+            land_comp_source=(land_comp or {}).get("source") if isinstance(land_comp, dict) else None,
         )
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
 
     result = est.to_dict()
+    result["land_comp"] = land_comp
 
     # Tell the UI whether the footprint came from a drawn polygon (geodesic area)
     # or a manual sq ft entry, so it can label the source honestly.
@@ -104,6 +162,7 @@ def health():
         "status": "ok",
         "metals_key_configured": bool(os.environ.get("METALS_DEV_API_KEY", "").strip()),
         "rentcast_key_configured": bool(os.environ.get("RENTCAST_API_KEY", "").strip()),
+        "geocoder": "OpenStreetMap Nominatim (free, no key)",
     })
 
 

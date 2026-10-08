@@ -26,7 +26,9 @@ STEEL_TONNES_PER_SQFT = 0.016
 
 # Copper intensity (tonnes per MW). Lower bound = facility-only rule of thumb;
 # default = including near-site power connections (anchored on Microsoft's
-# ~80 MW Chicago site ~= 27 t/MW). Source: BloombergNEF / BHP.
+# ~80 MW Chicago site ~= 27 t/MW). Source: BloombergNEF / BHP, corroborated
+# independently by WEF/Kearney Dec 2025 Figure 4 (facility-only sum ~11.6 t/MW,
+# within 3% of the 12 t/MW figure here). See SOURCES.md entry 3.
 COPPER_TONNES_PER_MW_FACILITY = 12.0
 COPPER_TONNES_PER_MW_WITH_GRID = 26.0
 
@@ -36,6 +38,63 @@ COPPER_TONNES_PER_MW_WITH_GRID = 26.0
 CONCRETE_M3_PER_MW = 750.0
 # Rough density to also express concrete as tonnes for context (~2.4 t/m3).
 CONCRETE_TONNES_PER_M3 = 2.4
+
+# --- Aluminum intensity (tonnes per MW) ----------------------------------------
+# Source: World Economic Forum / Kearney, "From Minerals to Megawatts" white paper
+# (Dec 2025), Figure 4, "Data centre component breakdown by mineral (kgs per MW)" —
+# attributed to Bank of America Securities / IEA / Kearney analysis. Summing
+# aluminum across all five components (cooling ~6,700 + servers ~2,700 + backup
+# ~1,200 + electrical ~460 + networking ~260 kg/MW) gives ~11.3 t/MW. This replaced
+# an earlier bottom-up (rack-frame + cooling-CDU only) lower-bound estimate once
+# this better-sourced, reputable whole-facility figure was found; see SOURCES.md
+# entry 5 for the full component table and the superseded bottom-up cross-check.
+ALUMINUM_TONNES_PER_MW = 11.3
+
+# --- Battery-backup (UPS) metals ----------------------------------------------
+# New-build hyperscale/colo UPS is now predominantly lithium-ion; legacy sites (and
+# much of the installed base) still use VRLA lead-acid, often alongside Li-ion.
+# This is the line most connected to the battery-metals / PGM mining thesis.
+# CRUCIAL honesty point: data-center UPS only provides minutes of ride-through
+# before generators start, so the battery ENERGY per MW is small versus grid-scale
+# storage, and so is the implied metal tonnage. We make that explicit rather than
+# overstating it, and we give TWO figures rather than one:
+#
+#   (a) HEADLINE, top-down: WEF/Kearney "From Minerals to Megawatts" (Dec 2025),
+#       Figure 4, backup-power component, kg/MW (source: Bank of America
+#       Securities / IEA / Kearney analysis). This reflects the REAL fleet mix
+#       (mostly Li-ion, with lead-acid still present) and real-world redundancy/
+#       runtime assumptions, not just a single ride-through calc.
+#   (b) LOWER-BOUND cross-check, bottom-up: a 5-minute full-load ride-through
+#       calc (standard sizing; see SOURCES.md entry 12), de-rated for UPS
+#       efficiency (~95%) and usable depth-of-discharge (~90%), x NMC811 cathode
+#       intensity (IEA/ICCT/Argonne BatPaC). This comes out ~3-4x BELOW the WEF
+#       headline, consistent with WEF assuming a longer effective runtime /
+#       N+1 redundancy / blended fleet rather than a bare 5-minute minimum.
+#
+# Both are shown; neither is priced into the total (see note in estimate_site()).
+WEF_BACKUP_LITHIUM_KG_PER_MW = 30.0
+WEF_BACKUP_NICKEL_KG_PER_MW = 220.0
+WEF_BACKUP_COBALT_KG_PER_MW = 40.0
+WEF_BACKUP_LEAD_KG_PER_MW = 240.0
+WEF_BACKUP_GRAPHITE_KG_PER_MW = 290.0
+WEF_BACKUP_ALUMINUM_KG_PER_MW = 1_200.0
+WEF_BACKUP_COPPER_KG_PER_MW = 2_200.0
+
+# UPS energy sizing: 5 minutes full-load ride-through (standard), de-rated for UPS
+# efficiency (~95%) and usable depth-of-discharge (~90%):
+#   kWh/MW = 1000 kW * (5/60) h / (0.95 * 0.90) ~= 97.5 kWh per MW of IT load.
+UPS_RIDE_THROUGH_MIN = 5.0
+UPS_EFFICIENCY = 0.95
+UPS_USABLE_DOD = 0.90
+UPS_KWH_PER_MW = 1000.0 * (UPS_RIDE_THROUGH_MIN / 60.0) / (UPS_EFFICIENCY * UPS_USABLE_DOD)
+
+# NMC811 cathode critical-metal intensity (kg per kWh of battery capacity).
+# Source: IEA / ICCT / Argonne BatPaC (see SOURCES.md entry 12). NMC811 = 80% Ni.
+BATTERY_LI_KG_PER_KWH = 0.10
+BATTERY_NI_KG_PER_KWH = 0.65
+BATTERY_CO_KG_PER_KWH = 0.081
+# LFP alternative (increasingly common for DC UPS): lithium only, no Ni/Co.
+BATTERY_LI_KG_PER_KWH_LFP = 0.09
 
 # Static steel price (USD per metric ton). NOT a live quote: steel is not on the
 # Metals.Dev free tier. Generic US structural/HRC benchmark. Source: SOURCES.md.
@@ -124,12 +183,29 @@ class Estimate:
     copper_tonnes_with_grid: float = 0.0
     concrete_m3: float = 0.0
     concrete_tonnes: float = 0.0
+    aluminum_tonnes: float = 0.0
     acres: float = 0.0
+
+    # Battery-backup (UPS) metals — physical quantities (not priced). Reported in
+    # kg because the tonnage at UPS scale is small; a grid-BESS note is attached.
+    # HEADLINE figures are WEF/Kearney Dec 2025 (top-down, real fleet mix); the
+    # "_lowerbound" figures are our own 5-min-ride-through bottom-up cross-check.
+    battery_lithium_kg: float = 0.0
+    battery_nickel_kg: float = 0.0
+    battery_cobalt_kg: float = 0.0
+    battery_lead_kg: float = 0.0
+    battery_graphite_kg: float = 0.0
+    ups_battery_kwh_lowerbound: float = 0.0
+    battery_lithium_kg_lowerbound: float = 0.0
+    battery_nickel_kg_lowerbound: float = 0.0
+    battery_cobalt_kg_lowerbound: float = 0.0
+    battery_lithium_kg_lfp_lowerbound: float = 0.0
 
     # Values (USD)
     land_value_usd: float = 0.0
     steel_cost_usd: float = 0.0
     copper_cost_usd: float = 0.0
+    aluminum_cost_usd: float = 0.0
     material_cost_usd: float = 0.0
     shell_cost_usd: float = 0.0
     total_site_value_usd: float = 0.0
@@ -148,13 +224,18 @@ class Estimate:
 
 def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
                   copper_price_source, aluminum_price_usd_per_tonne=None,
-                  aluminum_price_source=None):
+                  aluminum_price_source=None, land_price_per_acre_override=None,
+                  land_comp_label=None, land_comp_source=None):
     """
     Build the full site estimate.
 
     copper_price_usd_per_tonne may be None if no live price is available
     (e.g. no API key). In that case the copper cost line is reported as
     unavailable rather than fabricated, and it is excluded from the total.
+
+    land_price_per_acre_override, when supplied (from the granular, auto-detected
+    and user-confirmed land comparable), replaces the broad-region proxy for the
+    land-value line. land_comp_label / land_comp_source describe its provenance.
     """
     lat, lng, sqft, region = validate_inputs(lat, lng, sqft, region)
 
@@ -169,13 +250,48 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
     est.concrete_tonnes = est.concrete_m3 * CONCRETE_TONNES_PER_M3
     est.acres = sqft / SQFT_PER_ACRE
 
-    # Land value (regional proxy)
-    per_acre = LAND_PRICE_USD_PER_ACRE[region]
-    est.land_value_usd = est.acres * per_acre
-    est.price_sources["land"] = (
-        f"Regional average proxy ({region}): ${per_acre:,.0f}/acre. "
-        "NOT a parcel-level appraisal. See SOURCES.md."
-    )
+    # Capacity / cooling is computed up front (used by capacity-dependent notes).
+    cap = estimate_capacity(sqft, est.implied_mw)
+    est.capacity = cap.to_dict()
+
+    # Aluminum: WEF/Kearney Dec 2025 whole-facility per-MW figure (reputable
+    # secondary, named attribution). Priced live via Metals.Dev when available.
+    est.aluminum_tonnes = est.implied_mw * ALUMINUM_TONNES_PER_MW
+
+    # Battery-backup (UPS) metals.
+    #  (a) HEADLINE: WEF/Kearney Dec 2025 top-down kg/MW (real fleet mix, incl.
+    #      lead-acid still present alongside lithium-ion).
+    est.battery_lithium_kg = est.implied_mw * WEF_BACKUP_LITHIUM_KG_PER_MW
+    est.battery_nickel_kg = est.implied_mw * WEF_BACKUP_NICKEL_KG_PER_MW
+    est.battery_cobalt_kg = est.implied_mw * WEF_BACKUP_COBALT_KG_PER_MW
+    est.battery_lead_kg = est.implied_mw * WEF_BACKUP_LEAD_KG_PER_MW
+    est.battery_graphite_kg = est.implied_mw * WEF_BACKUP_GRAPHITE_KG_PER_MW
+    #  (b) LOWER-BOUND cross-check: our own 5-min-ride-through bottom-up calc,
+    #      lithium-ion (NMC811) only. Shown to make the sizing assumption visible;
+    #      comes out ~3-4x below the WEF headline (see constant comments above).
+    est.ups_battery_kwh_lowerbound = est.implied_mw * UPS_KWH_PER_MW
+    est.battery_lithium_kg_lowerbound = est.ups_battery_kwh_lowerbound * BATTERY_LI_KG_PER_KWH
+    est.battery_nickel_kg_lowerbound = est.ups_battery_kwh_lowerbound * BATTERY_NI_KG_PER_KWH
+    est.battery_cobalt_kg_lowerbound = est.ups_battery_kwh_lowerbound * BATTERY_CO_KG_PER_KWH
+    est.battery_lithium_kg_lfp_lowerbound = est.ups_battery_kwh_lowerbound * BATTERY_LI_KG_PER_KWH_LFP
+
+    # Land value. Prefer the granular, auto-detected + user-confirmed comparable
+    # (state agricultural proxy, or a metro/county data-center-land figure where one
+    # exists) when supplied; otherwise fall back to the broad-region proxy.
+    if land_price_per_acre_override is not None:
+        per_acre = float(land_price_per_acre_override)
+        est.land_value_usd = est.acres * per_acre
+        est.price_sources["land"] = (
+            f"{land_comp_label or 'Detected comparable'}: ${per_acre:,.0f}/acre. "
+            f"{land_comp_source or ''} NOT a parcel-level appraisal. See SOURCES.md."
+        ).strip()
+    else:
+        per_acre = LAND_PRICE_USD_PER_ACRE[region]
+        est.land_value_usd = est.acres * per_acre
+        est.price_sources["land"] = (
+            f"Regional average proxy ({region}): ${per_acre:,.0f}/acre. "
+            "NOT a parcel-level appraisal. See SOURCES.md."
+        )
 
     # Steel cost (static price, clearly labeled)
     est.steel_cost_usd = est.steel_tonnes * STATIC_STEEL_PRICE_USD_PER_TONNE
@@ -204,12 +320,21 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
             "include it."
         )
 
-    # Aluminum: price is fetched if available, but no defensible intensity figure
-    # is modeled in v1 (see SOURCES.md), so it is reported for reference only.
+    # Aluminum cost (live price if available). Priced on the WEF/Kearney whole-
+    # facility per-MW tonnage (Dec 2025, Bank of America Securities/IEA/Kearney).
     if aluminum_price_usd_per_tonne is not None:
+        est.aluminum_cost_usd = est.aluminum_tonnes * aluminum_price_usd_per_tonne
         est.price_sources["aluminum"] = (
-            f"LIVE price ${aluminum_price_usd_per_tonne:,.2f}/tonne "
-            f"via {aluminum_price_source} (reference only; no v1 intensity figure)."
+            f"LIVE price ${aluminum_price_usd_per_tonne:,.2f}/tonne via "
+            f"{aluminum_price_source}, on {ALUMINUM_TONNES_PER_MW:.1f} t/MW "
+            f"(WEF/Kearney 'From Minerals to Megawatts', Dec 2025, Fig. 4; "
+            f"source: Bank of America Securities/IEA/Kearney). See SOURCES.md."
+        )
+    else:
+        est.aluminum_cost_usd = 0.0
+        est.price_sources["aluminum"] = (
+            f"Live aluminum price unavailable ({aluminum_price_source}). "
+            "Aluminum cost excluded from total (tonnage still shown)."
         )
 
     # Shell / base-building construction cost (excludes the power/M&E chain, which
@@ -227,12 +352,50 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
         f"copper / steel / MW figures. See SOURCES.md."
     )
 
-    # Indicative rack-capacity and cooling characterisation (not priced).
-    est.capacity = estimate_capacity(sqft, est.implied_mw).to_dict()
+    # Battery-backup (UPS) metals provenance. Not priced into the total: there is
+    # no clean live spot price for battery-grade lithium/cobalt/lead on the
+    # Metals.Dev free tier (nickel IS on the free tier but as LME nickel metal, not
+    # battery sulfate, so pricing it would be misleading). Shown as physical
+    # quantities for the battery-metals thesis, with both the top-down headline and
+    # the bottom-up lower-bound cross-check so the sizing assumption is visible.
+    est.price_sources["battery"] = (
+        f"HEADLINE (WEF/Kearney 'From Minerals to Megawatts', Dec 2025, Fig. 4; "
+        f"source: Bank of America Securities/IEA/Kearney): Li {est.battery_lithium_kg:,.0f} kg, "
+        f"Ni {est.battery_nickel_kg:,.0f} kg, Co {est.battery_cobalt_kg:,.0f} kg, "
+        f"Pb {est.battery_lead_kg:,.0f} kg, graphite {est.battery_graphite_kg:,.0f} kg "
+        f"(real fleet mix: mostly Li-ion, lead-acid still present). LOWER-BOUND cross-check "
+        f"(our own {UPS_RIDE_THROUGH_MIN:.0f}-min ride-through calc, Li-ion NMC811 only, "
+        f"~{UPS_KWH_PER_MW:.0f} kWh/MW, IEA/ICCT/Argonne BatPaC intensity): Li "
+        f"{est.battery_lithium_kg_lowerbound:,.0f} kg, Ni {est.battery_nickel_kg_lowerbound:,.0f} kg, "
+        f"Co {est.battery_cobalt_kg_lowerbound:,.0f} kg (LFP alt: Li "
+        f"{est.battery_lithium_kg_lfp_lowerbound:,.0f} kg, no Ni/Co) — the lower-bound comes out "
+        f"~3-4x below the WEF headline, consistent with WEF assuming a longer effective runtime / "
+        f"N+1 redundancy / blended fleet rather than a bare 5-minute minimum. Physical quantities "
+        f"only — small at data-center-UPS scale, far larger for grid-scale BESS co-located with a "
+        f"data center. See SOURCES.md."
+    )
+    est.notes.append(
+        "Battery-backup (UPS) metal quantities are small because data-center UPS "
+        "only bridges minutes to generator start — unlike grid-scale BESS. Two "
+        "figures are shown (WEF/Kearney top-down headline + our own bottom-up "
+        "lower-bound cross-check) to make the sizing assumption visible. Not "
+        "priced; shown to connect the build to the battery-metals / PGM mining angle."
+    )
 
-    # Totals. Headline total = land + priced materials (steel + copper) + shell
-    # base-building cost.
-    est.material_cost_usd = est.steel_cost_usd + est.copper_cost_usd
+    # Aluminum provenance context (tonnage basis).
+    est.price_sources["aluminum_qty"] = (
+        f"{est.aluminum_tonnes:,.1f} t = {ALUMINUM_TONNES_PER_MW:.1f} t/MW x "
+        f"{est.implied_mw:,.1f} MW. Whole-facility figure (cooling + servers + "
+        f"backup + electrical + networking) from WEF/Kearney 'From Minerals to "
+        f"Megawatts' (Dec 2025), Fig. 4. See SOURCES.md."
+    )
+
+    # Totals. Headline total = land + priced materials (steel + copper + aluminum)
+    # + shell base-building cost. Battery metals and concrete are physical-quantity
+    # context lines and are NOT priced into the total.
+    est.material_cost_usd = (
+        est.steel_cost_usd + est.copper_cost_usd + est.aluminum_cost_usd
+    )
     est.total_site_value_usd = (
         est.land_value_usd + est.material_cost_usd + est.shell_cost_usd
     )

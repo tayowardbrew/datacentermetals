@@ -105,6 +105,53 @@
       border: none; cursor: pointer; font-size: 0.78rem; font-weight: 600;
     }
     .mode-tabs button.active { background: var(--navy-3); color: var(--teal); }
+    /* Location search bar above the map */
+    .searchbar { margin-bottom: 10px; }
+    .searchbox { position: relative; }
+    #placeSearch, #overrideSearch {
+      width: 100%; padding: 11px 12px; font-size: 0.95rem;
+      background: var(--navy-2); border: 1px solid var(--line);
+      border-radius: 6px; color: var(--text);
+    }
+    #placeSearch:focus, #overrideSearch:focus { outline: none; border-color: var(--teal); }
+    .search-hint { display: block; font-size: 0.72rem; color: var(--muted); margin-top: 5px; }
+    .search-results {
+      position: absolute; z-index: 1000; left: 0; right: 0; top: calc(100% + 4px);
+      background: var(--navy-3); border: 1px solid var(--teal-dim);
+      border-radius: 6px; overflow: hidden; max-height: 280px; overflow-y: auto;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+    }
+    .search-results .res {
+      padding: 10px 12px; font-size: 0.85rem; cursor: pointer;
+      border-bottom: 1px solid var(--line); color: var(--text);
+    }
+    .search-results .res:last-child { border-bottom: none; }
+    .search-results .res:hover, .search-results .res.active { background: var(--navy-2); }
+    .search-results .res .t { font-size: 0.72rem; color: var(--teal); text-transform: uppercase; letter-spacing: 0.05em; }
+    .search-results .msg { padding: 10px 12px; font-size: 0.82rem; color: var(--muted); }
+
+    /* Auto-detected land comparable confirm/override panel */
+    .landcomp {
+      margin: -8px 0 14px; padding: 14px; background: var(--navy-2);
+      border: 1px solid var(--teal-dim); border-left: 3px solid var(--teal); border-radius: 6px;
+    }
+    .landcomp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .landcomp-eyebrow { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--teal); font-weight: 700; }
+    .landcomp-body { font-size: 0.9rem; color: var(--text); line-height: 1.5; }
+    .landcomp-body .big { font-weight: 800; font-variant-numeric: tabular-nums; }
+    .landcomp-body .src { display: block; font-size: 0.76rem; color: var(--muted); margin-top: 5px; }
+    .landcomp-actions { display: flex; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
+    .mini-btn {
+      padding: 7px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+      background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 5px;
+    }
+    .mini-btn:hover { border-color: var(--teal); color: var(--text); }
+    .mini-btn.primary-mini { background: var(--teal); color: var(--navy); border-color: var(--teal); }
+    .mini-btn.primary-mini:hover { background: #22d8c6; }
+    .mini-btn.confirmed { background: rgba(53,196,138,0.16); color: var(--good); border-color: var(--good); }
+    .landcomp-override { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+    .landcomp-override label { margin-top: 10px; }
+    .landcomp-override label:first-child { margin-top: 0; }
     #map { height: 380px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 16px; }
     .draw-readout {
       display: flex; justify-content: space-between; align-items: center;
@@ -170,9 +217,10 @@
           <h1>Data Center Site Value Estimator</h1>
         </div>
       </div>
-      <p class="lede">Draw a candidate parcel on satellite imagery and estimate its implied power capacity,
-        materials intensity (steel, copper), shell construction cost, rack capacity and typical cooling method —
-        resolved to an implied site value in today's commodity terms.</p>
+      <p class="lede">Search a location, draw a candidate parcel on satellite imagery, and estimate its implied
+        power capacity, materials intensity (steel, copper, aluminum and battery-backup metals), shell construction
+        cost, rack capacity and typical cooling method — with an auto-detected, confirmable land comparable, resolved
+        to an implied site value in today's commodity terms.</p>
       <p><strong>Thesis:</strong> an early, defensible estimate of a data center site's implied collateral value
         can support an asset-backed debt argument before or during construction, applying a commodities /
         materials-intensity lens to AI infrastructure.</p>
@@ -221,10 +269,40 @@
     </div>
 
     <div>
+      <div class="searchbar">
+        <div class="searchbox">
+          <input id="placeSearch" type="text" autocomplete="off" spellcheck="false"
+            placeholder="Search an address, street, area or city, then draw the parcel…" />
+          <div id="searchResults" class="search-results" style="display:none;"></div>
+        </div>
+        <span class="search-hint" id="searchHint">Free geocoding via OpenStreetMap Nominatim</span>
+      </div>
       <div id="map"></div>
       <div class="draw-readout" id="drawReadout" style="display:none;">
         <span>Drawn parcel area (geodesic)</span>
         <strong id="drawArea">—</strong>
+      </div>
+      <div class="landcomp" id="landComp" style="display:none;">
+        <div class="landcomp-head">
+          <span class="landcomp-eyebrow">Auto-detected land comparable</span>
+          <span class="badge proxy" id="landCompBadge">DETECTED</span>
+        </div>
+        <div class="landcomp-body" id="landCompBody">—</div>
+        <div class="landcomp-actions">
+          <button id="landConfirm" class="mini-btn primary-mini">Confirm comparable</button>
+          <button id="landOverride" class="mini-btn">Use a different area / value</button>
+        </div>
+        <div class="landcomp-override" id="landOverridePanel" style="display:none;">
+          <label for="overrideSearch">Search a different area</label>
+          <div class="searchbox">
+            <input id="overrideSearch" type="text" autocomplete="off" spellcheck="false"
+              placeholder="e.g. Loudoun County, Virginia" />
+            <div id="overrideResults" class="search-results" style="display:none;"></div>
+          </div>
+          <label for="overrideValue">…or set $/acre directly</label>
+          <input id="overrideValue" type="number" step="any" placeholder="e.g. 250000" />
+          <button id="overrideApply" class="mini-btn primary-mini" style="margin-top:8px;">Apply this comparable</button>
+        </div>
       </div>
       <div class="card">
         <div id="output">
@@ -270,6 +348,9 @@
     let manualMarker = null;
     let drawnLayer = null;          // the single drawn polygon/rectangle
     let mode = "draw";
+    let searchMarker = null;        // pin dropped when a search result is picked
+    let landComp = null;            // the auto-detected / confirmed land comparable
+    let landCompConfirmed = false;  // has the user confirmed/overridden it?
 
     const drawnItems = new L.FeatureGroup().addTo(map);
     const drawControl = new L.Control.Draw({
@@ -332,18 +413,19 @@
       }
     }
 
-    function setDrawnLayer(layer) {
+    function setDrawnLayer(layer, opts) {
       drawnItems.clearLayers();
       drawnLayer = layer;
       drawnItems.addLayer(layer);
       setDrawReadout();
       updateUrlHash();
+      if (!opts || opts.detect !== false) detectLandComp();
     }
 
     map.on(L.Draw.Event.CREATED, (e) => { setDrawnLayer(e.layer); });
-    map.on(L.Draw.Event.EDITED, () => { setDrawReadout(); updateUrlHash(); });
+    map.on(L.Draw.Event.EDITED, () => { setDrawReadout(); updateUrlHash(); detectLandComp(); });
     map.on(L.Draw.Event.DELETED, () => {
-      drawnLayer = null; setDrawReadout();
+      drawnLayer = null; setDrawReadout(); hideLandComp();
       history.replaceState(null, "", location.pathname + location.search);
     });
 
@@ -431,6 +513,191 @@
       }
     });
 
+    // ---- Location search (free geocoding via the backend -> Nominatim) ----
+    // We debounce input and require >=3 chars so we never hammer Nominatim on every
+    // keystroke, per its usage policy. The backend adds a 1-req/sec backstop.
+    function debounce(fn, ms) {
+      let t;
+      return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+    }
+
+    async function geocode(q) {
+      const resp = await fetch("/api/geocode?q=" + encodeURIComponent(q));
+      return resp.json();
+    }
+
+    function renderSuggestions(container, data, onPick) {
+      if (!data || !data.ok) {
+        container.innerHTML = `<div class="msg">${(data && data.message) || "Search unavailable."}</div>`;
+        container.style.display = "block";
+        return;
+      }
+      if (!data.results.length) {
+        container.innerHTML = `<div class="msg">${data.message || "No matching places found."}</div>`;
+        container.style.display = "block";
+        return;
+      }
+      container.innerHTML = data.results.map((r, i) =>
+        `<div class="res" data-i="${i}">
+           <div class="t">${r.type || r.category || "place"}</div>
+           ${r.display_name}
+         </div>`
+      ).join("");
+      container.querySelectorAll(".res").forEach((el) => {
+        el.addEventListener("click", () => onPick(data.results[Number(el.dataset.i)]));
+      });
+      container.style.display = "block";
+    }
+
+    function hideResults(container) { container.style.display = "none"; }
+
+    // Main search box above the map: fly the map to the chosen place.
+    const searchInput = document.getElementById("placeSearch");
+    const searchResults = document.getElementById("searchResults");
+    const runMainSearch = debounce(async () => {
+      const q = searchInput.value.trim();
+      if (q.length < 3) { hideResults(searchResults); return; }
+      searchResults.innerHTML = `<div class="msg">Searching…</div>`;
+      searchResults.style.display = "block";
+      const data = await geocode(q);
+      renderSuggestions(searchResults, data, (place) => {
+        hideResults(searchResults);
+        searchInput.value = place.display_name;
+        flyToPlace(place);
+      });
+    }, 450);
+    searchInput.addEventListener("input", runMainSearch);
+    searchInput.addEventListener("focus", () => { if (searchResults.innerHTML) searchResults.style.display = "block"; });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".searchbox")) { hideResults(searchResults); hideResults(document.getElementById("overrideResults")); }
+    });
+
+    function flyToPlace(place) {
+      setMode("draw");
+      if (searchMarker) map.removeLayer(searchMarker);
+      searchMarker = L.marker([place.lat, place.lng]).addTo(map);
+      // Zoom level by result type: addresses tighter, cities wider.
+      const t = (place.type || "") + " " + (place.category || "");
+      let z = 17;
+      if (/city|administrative|state|county|region|town/i.test(t)) z = 13;
+      if (/village|hamlet|suburb|neighbourhood/i.test(t)) z = 15;
+      map.flyTo([place.lat, place.lng], z, { duration: 1.1 });
+      searchMarker.bindPopup("Draw the parcel here with the ▱ / ⬠ tools (top-right).").openPopup();
+    }
+
+    // ---- Auto-detected land comparable (reverse-geocode the drawn centroid) ----
+    async function detectLandComp() {
+      if (!drawnLayer) { hideLandComp(); return; }
+      const panel = document.getElementById("landComp");
+      const body = document.getElementById("landCompBody");
+      panel.style.display = "block";
+      body.innerHTML = `<span class="src">Detecting location of the drawn parcel…</span>`;
+      try {
+        const resp = await fetch("/api/detect-location", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ polygon: layerToLatLngs(drawnLayer).map(([a, b]) => [a, b]) }),
+        });
+        const data = await resp.json();
+        landComp = data.land_comp || null;
+        landCompConfirmed = false;
+        renderLandComp(data);
+      } catch (e) {
+        body.innerHTML = `<span class="src">Could not auto-detect location (${e.message}). You can set a $/acre value manually below.</span>`;
+        showOverride(true);
+      }
+    }
+
+    function renderLandComp(data) {
+      const body = document.getElementById("landCompBody");
+      const badge = document.getElementById("landCompBadge");
+      const c = data.land_comp || {};
+      const rev = data.reverse || {};
+      const place = [rev.county, rev.state].filter(Boolean).join(", ") ||
+                    (rev.ok ? (rev.display_name || "location detected") : "location not detected");
+      badge.textContent = c.tier ? c.tier.toUpperCase() : "DETECTED";
+      badge.className = "badge " + (c.tier === "metro" ? "live" : (c.tier === "state" ? "proxy" : "static"));
+      if (c.usd_per_acre) {
+        const premium = c.dc_premium_note
+          ? `<span class="src" style="color:var(--warn);">⚠ ${c.dc_premium_note}</span>` : "";
+        body.innerHTML =
+          `Detected: <strong>${place}</strong>.<br/>
+           Suggested comparable: <span class="big">$${Number(c.usd_per_acre).toLocaleString("en-US")}/acre</span>
+           <span class="src">${c.label || ""}${c.label ? " — " : ""}${c.source || ""}</span>
+           ${premium}`;
+      } else {
+        body.innerHTML =
+          `Detected: <strong>${place}</strong>, but no granular land figure was found for it.
+           <span class="src">${c.source || "Falling back to the broad regional proxy — set a value manually if you have a better comparable."}</span>`;
+      }
+      document.getElementById("landConfirm").classList.remove("confirmed");
+      document.getElementById("landConfirm").textContent = "Confirm comparable";
+      showOverride(false);
+    }
+
+    function hideLandComp() {
+      document.getElementById("landComp").style.display = "none";
+      landComp = null; landCompConfirmed = false;
+    }
+    function showOverride(show) {
+      document.getElementById("landOverridePanel").style.display = show ? "block" : "none";
+    }
+
+    document.getElementById("landConfirm").addEventListener("click", () => {
+      landCompConfirmed = true;
+      const btn = document.getElementById("landConfirm");
+      btn.textContent = "Comparable confirmed ✓"; btn.classList.add("confirmed");
+      showOverride(false);
+    });
+    document.getElementById("landOverride").addEventListener("click", () => {
+      const p = document.getElementById("landOverridePanel");
+      showOverride(p.style.display !== "block");
+    });
+
+    // Override: search a different area -> use ITS detected comp.
+    const overrideInput = document.getElementById("overrideSearch");
+    const overrideResults = document.getElementById("overrideResults");
+    const runOverrideSearch = debounce(async () => {
+      const q = overrideInput.value.trim();
+      if (q.length < 3) { hideResults(overrideResults); return; }
+      overrideResults.innerHTML = `<div class="msg">Searching…</div>`;
+      overrideResults.style.display = "block";
+      const data = await geocode(q);
+      renderSuggestions(overrideResults, data, async (place) => {
+        hideResults(overrideResults);
+        overrideInput.value = place.display_name;
+        // Look up the comp for the chosen area's coordinates.
+        const resp = await fetch("/api/detect-location", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: place.lat, lng: place.lng }),
+        });
+        const d = await resp.json();
+        landComp = d.land_comp || null;
+        landCompConfirmed = true;
+        renderLandComp(d);
+        const btn = document.getElementById("landConfirm");
+        btn.textContent = "Comparable confirmed ✓"; btn.classList.add("confirmed");
+      });
+    }, 450);
+    overrideInput.addEventListener("input", runOverrideSearch);
+
+    // Override: set $/acre directly.
+    document.getElementById("overrideApply").addEventListener("click", () => {
+      const v = parseFloat(document.getElementById("overrideValue").value);
+      if (isNaN(v) || v <= 0) return;
+      landComp = {
+        usd_per_acre: v,
+        tier: "manual",
+        label: "User-entered comparable",
+        source: "Manually entered $/acre (user override).",
+      };
+      landCompConfirmed = true;
+      renderLandComp({ land_comp: landComp, reverse: { ok: true, display_name: "manual value" } });
+      const btn = document.getElementById("landConfirm");
+      btn.textContent = "Comparable confirmed ✓"; btn.classList.add("confirmed");
+    });
+
     // ---- Rendering ----
     function barRow(label, value, max, badgeHtml) {
       const pct = max > 0 ? Math.max(2, Math.min(100, (value / max) * 100)) : 0;
@@ -447,18 +714,27 @@
 
     function render(r) {
       const copperLive = r.metals_status.ok;
+      const aluminumLive = r.metals_status.ok && r.aluminum_cost_usd > 0;
       const cap = r.capacity || {};
       const areaLabel = r.area_source === "drawn_polygon"
         ? badge("live", "FROM DRAWN AREA")
         : badge("static", "MANUAL");
 
-      // Value components for the comparative bars (copper may be excluded).
+      // Land badge reflects the comparable tier (metro DC-land vs state proxy vs region).
+      const lc = r.land_comp || {};
+      const landBadge = lc.tier === "metro" ? badge("live", "DC-LAND COMP")
+        : lc.tier === "state" ? badge("proxy", "STATE AG PROXY")
+        : lc.tier === "manual" ? badge("benchmark", "USER COMP")
+        : badge("proxy", "REGIONAL PROXY");
+
+      // Value components for the comparative bars (copper/aluminum may be excluded).
       const comps = [
         ["Shell / base-building cost", r.shell_cost_usd, badge("benchmark", "BENCHMARK, EXCL. POWER")],
-        ["Land value", r.land_value_usd, badge("proxy", "REGIONAL PROXY")],
+        ["Land value", r.land_value_usd, landBadge],
         ["Steel cost", r.steel_cost_usd, badge("static", "STATIC PRICE")],
       ];
       if (copperLive) comps.push(["Copper cost", r.copper_cost_usd, badge("live", "LIVE PRICE")]);
+      if (aluminumLive) comps.push(["Aluminum cost", r.aluminum_cost_usd, badge("live", "LIVE PRICE")]);
       const maxComp = Math.max(...comps.map((c) => c[1] || 0), 1);
 
       let rentcastRow = "";
@@ -489,6 +765,7 @@
           ${comps.map((c) => barRow(c[0], c[1], maxComp, c[2])).join("")}
           ${rentcastRow}
           ${!copperLive ? `<tr><td>Copper cost ${badge("static", "NO LIVE PRICE")}</td><td class="num">excluded</td></tr>` : ""}
+          ${!aluminumLive ? `<tr><td>Aluminum cost ${badge("static", "NO LIVE PRICE")}</td><td class="num">excluded</td></tr>` : ""}
           <tr class="total"><td>Total implied site value</td><td class="num">${fmtUSD(r.total_site_value_usd)}</td></tr>
         </table>
 
@@ -506,8 +783,31 @@
           <tr><td>Steel required ${badge("benchmark", "BENCHMARK")}</td><td class="num">${fmtNum(r.steel_tonnes)} t</td></tr>
           <tr><td>Copper (facility-only)</td><td class="num">${fmtNum(r.copper_tonnes_facility)} t</td></tr>
           <tr><td>Copper (incl. near-site power) ${badge("benchmark", "BENCHMARK")}</td><td class="num">${fmtNum(r.copper_tonnes_with_grid)} t</td></tr>
+          <tr><td>Aluminum (whole-facility) ${badge("benchmark", "WEF/KEARNEY, DEC 2025")}</td><td class="num">${fmtNum(r.aluminum_tonnes, 1)} t</td></tr>
           <tr><td>Concrete (context only, not priced)</td><td class="num">${fmtNum(r.concrete_m3)} m³ / ${fmtNum(r.concrete_tonnes)} t</td></tr>
         </table>
+
+        <div class="panel-title">Battery-backup (UPS) metals ${badge("proxy", "NOT PRICED")}</div>
+        <table>
+          <tr><td colspan="2" style="color:var(--teal);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;padding-top:12px;">Headline — WEF/Kearney (real fleet mix)</td></tr>
+          <tr><td>Lithium</td><td class="num">${fmtNum(r.battery_lithium_kg)} kg</td></tr>
+          <tr><td>Nickel</td><td class="num">${fmtNum(r.battery_nickel_kg)} kg</td></tr>
+          <tr><td>Cobalt</td><td class="num">${fmtNum(r.battery_cobalt_kg)} kg</td></tr>
+          <tr><td>Lead (lead-acid still present in the fleet)</td><td class="num">${fmtNum(r.battery_lead_kg)} kg</td></tr>
+          <tr><td>Graphite (anode)</td><td class="num">${fmtNum(r.battery_graphite_kg)} kg</td></tr>
+          <tr><td colspan="2" style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;padding-top:12px;">Lower-bound cross-check — 5-min ride-through, Li-ion only</td></tr>
+          <tr><td>Implied UPS battery energy</td><td class="num">${fmtNum(r.ups_battery_kwh_lowerbound)} kWh</td></tr>
+          <tr><td>Lithium (NMC811)</td><td class="num">${fmtNum(r.battery_lithium_kg_lowerbound)} kg</td></tr>
+          <tr><td>Nickel (NMC811)</td><td class="num">${fmtNum(r.battery_nickel_kg_lowerbound)} kg</td></tr>
+          <tr><td>Cobalt (NMC811)</td><td class="num">${fmtNum(r.battery_cobalt_kg_lowerbound)} kg</td></tr>
+          <tr><td>Lithium if LFP instead (no Ni/Co)</td><td class="num">${fmtNum(r.battery_lithium_kg_lfp_lowerbound)} kg</td></tr>
+        </table>
+        <p class="note">Battery-metal tonnage is deliberately <strong>small</strong>: data-center UPS only bridges
+          minutes to generator start, unlike grid-scale BESS. The headline (WEF/Kearney, Dec 2025, Bank of America
+          Securities/IEA/Kearney analysis) reflects the real fleet mix and comes out ~3-4x above our own 5-minute
+          bottom-up cross-check — shown so the sizing assumption is visible, not hidden. Not priced into the total;
+          shown to connect the build to the battery-metals / PGM mining angle. The tonnage would be orders of
+          magnitude larger for a co-located grid-storage project.</p>
 
         <div class="provenance">
           <div class="line"><strong>Commodity pricing:</strong> ${r.metals_status.ok ? "LIVE" : "unavailable"} — ${r.metals_status.source}${r.metals_status.message ? " — " + r.metals_status.message : ""}</div>
@@ -515,7 +815,10 @@
           <div class="line"><strong>Land:</strong> ${r.price_sources.land}</div>
           <div class="line"><strong>Steel:</strong> ${r.price_sources.steel}</div>
           <div class="line"><strong>Copper:</strong> ${r.price_sources.copper}</div>
-          ${r.price_sources.aluminum ? `<div class="line"><strong>Aluminum:</strong> ${r.price_sources.aluminum}</div>` : ""}
+          ${r.price_sources.aluminum ? `<div class="line"><strong>Aluminum (price):</strong> ${r.price_sources.aluminum}</div>` : ""}
+          ${r.price_sources.aluminum_qty ? `<div class="line"><strong>Aluminum (qty):</strong> ${r.price_sources.aluminum_qty}</div>` : ""}
+          ${r.price_sources.battery ? `<div class="line"><strong>Battery metals:</strong> ${r.price_sources.battery}</div>` : ""}
+          ${lc.dc_premium_note ? `<div class="line"><strong>Land tier:</strong> ${lc.dc_premium_note}</div>` : ""}
           ${!r.rentcast.ok ? `<div class="line"><strong>RentCast:</strong> ${r.rentcast.message}</div>` : ""}
         </div>
 
@@ -524,9 +827,11 @@
         <div class="disclaimer">
           Benchmarks are documented in SOURCES.md. <strong>Shell cost is a base-building $/sq ft benchmark that
           deliberately EXCLUDES the IT power / electrical / mechanical chain</strong> (already captured via the
-          MW / copper / steel figures) to avoid double-counting. Land value is a <strong>regional average proxy,
-          not a parcel-level appraisal</strong>. Rack count and cooling method are indicative rules of thumb.
-          Concrete is shown for context and not priced into the total.
+          MW / copper / steel figures) to avoid double-counting. Land value is an <strong>auto-detected comparable
+          (metro DC-land transaction, state agricultural proxy, or broad region), not a parcel-level appraisal</strong>
+          — confirm or override it above. Rack count and cooling method are indicative rules of thumb. Concrete and
+          battery-backup metals are shown for context and not priced into the total. Aluminum and battery-metal
+          intensity are sourced from WEF/Kearney, "From Minerals to Megawatts" (Dec 2025).
         </div>`;
       document.getElementById("output").innerHTML = html;
     }
@@ -538,6 +843,10 @@
       const region = document.getElementById("region").value;
 
       let body = { region };
+      // Pass the confirmed/edited land comparable so the server uses the granular
+      // figure instead of the broad-region proxy. If the user never confirmed, we
+      // still pass what was auto-detected (the server also re-detects as a backstop).
+      if (landComp) body.land_comp = landComp;
       if (mode === "draw") {
         if (!drawnLayer) {
           errEl.textContent = "Draw a parcel on the map first (polygon or rectangle tool), or switch to manual entry.";
