@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, asdict
 
 from capacity import estimate_capacity
 from build_types import get_build_type, BUILD_TYPES, DEFAULT_BUILD_TYPE
+from power import parse_power_inputs, build_power_layer, PowerInputError
 from metals_mix import (
     compute_metals,
     BASE_STEEL_TONNES_PER_SQFT,
@@ -190,6 +191,12 @@ class Estimate:
     build_type: dict = field(default_factory=dict)
     power_density_w_per_sqft: float = 0.0
 
+    # Power / capacity layer (power.py). implied_mw below is the MW that DRIVES
+    # every per-MW quantity: the user's stated capacity if given, else the
+    # parcel-implied MW (sqft x build-type density), which is kept here too.
+    parcel_implied_mw: float = 0.0
+    power: dict = field(default_factory=dict)
+
     # Derived physical quantities
     implied_mw: float = 0.0
     stainless_tonnes: float = 0.0  # liquid-cooling pipework; quantity only, not priced
@@ -261,6 +268,8 @@ class Estimate:
 def estimate_site(lat, lng, sqft, region="national", live_prices=None,
                   live_price_source=None, live_price_message=None,
                   build_type=DEFAULT_BUILD_TYPE,
+                  power_value=None, power_unit="mw", utilization=None,
+                  state_code=None,
                   land_price_per_acre_override=None,
                   land_comp_label=None, land_comp_source=None):
     """
@@ -293,8 +302,21 @@ def estimate_site(lat, lng, sqft, region="national", live_prices=None,
 
     # Physical quantities. Implied MW from the parcel uses the build type's
     # power density (the hyperscale baseline is the original 250 W/sq ft).
-    est.implied_mw = (sqft * est.power_density_w_per_sqft) / 1_000_000.0
+    est.parcel_implied_mw = (sqft * est.power_density_w_per_sqft) / 1_000_000.0
+
+    # Power layer: a stated capacity (MW, or GWh/yr converted to MW) overrides
+    # the parcel-implied MW for every per-MW quantity; both are reported.
+    try:
+        pv, pu, util = parse_power_inputs(power_value, power_unit, utilization)
+    except PowerInputError as e:
+        raise ValidationError(str(e))
+    est.power = build_power_layer(
+        est.parcel_implied_mw, sqft, pv, pu, util, bt["pue"], state_code
+    )
+    est.implied_mw = est.power["driving_mw"]
     mw = est.implied_mw
+    if est.power.get("check"):
+        est.notes.append(est.power["check"])
     est.copper_tonnes_facility = mw * COPPER_TONNES_PER_MW_FACILITY * fm.get("copper", 1.0)
     est.stainless_tonnes = mw * bt["stainless_t_per_mw"]
     est.concrete_m3 = est.implied_mw * CONCRETE_M3_PER_MW * bt["concrete_multiplier"]

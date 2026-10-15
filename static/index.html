@@ -124,6 +124,11 @@
     .bt-chip.up { border-color: rgba(224,164,76,0.5); }
     .bt-chip.down { border-color: rgba(43,111,143,0.7); }
     .bt-hedge { font-size: 0.7rem; font-style: italic; }
+    .cap-row { display: grid; grid-template-columns: 1fr 1.25fr; gap: 8px; }
+    .util-hint { display: flex; align-items: flex-end; }
+    .util-hint .hint { margin: 0 0 4px; }
+    .check { font-size: 0.8rem; margin: 6px 0 0; padding: 9px 12px; border-radius: 5px; background: var(--navy); border-left: 3px solid var(--petrol); color: var(--text); }
+    .check.warn { border-left-color: var(--warn); }
     .mode-tabs { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 4px; }
     .mode-tabs button {
       flex: 1; padding: 9px 6px; background: var(--navy); color: var(--muted);
@@ -313,6 +318,24 @@
         <p class="hint">Loading build types…</p>
       </div>
       <p class="hint">Each type changes the metals mix per MW, not just power density. Press + for how it differs.</p>
+
+      <label for="capValue">Planned IT capacity (optional)</label>
+      <div class="cap-row">
+        <input id="capValue" type="number" step="any" min="0" placeholder="From parcel" />
+        <select id="capUnit" aria-label="Capacity unit">
+          <option value="mw">MW (IT load)</option>
+          <option value="gwh">GWh/yr (IT energy)</option>
+        </select>
+      </div>
+      <div class="row">
+        <div>
+          <label for="capUtil">Avg utilization</label>
+          <input id="capUtil" type="number" step="1" min="10" max="100" value="67" />
+        </div>
+        <div class="util-hint"><p class="hint">% of IT capacity drawn on average. Converts MW to GWh/yr.</p></div>
+      </div>
+      <p class="hint">Leave blank to infer capacity from the parcel area. If you know the planned capacity, enter it:
+        it then drives the metals tonnage, and the parcel-based figure is shown alongside as a cross-check.</p>
 
       <button id="go" class="primary">Estimate site value</button>
       <button id="share" class="ghost" style="display:none;">Copy shareable link to this parcel</button>
@@ -710,13 +733,26 @@
       if (stateSel.value) x.s = stateSel.value;
       if (countyInp.value.trim()) x.c = countyInp.value.trim();
       if (buildType !== "hyperscale") x.b = buildType;
+      const cv = document.getElementById("capValue").value;
+      if (cv) { x.cv = Number(cv); x.cu = document.getElementById("capUnit").value; }
+      const cu = document.getElementById("capUtil").value;
+      if (cu && Number(cu) !== 67) x.ut = Number(cu);
       return x;
     }
     function restoreHashExtras(p) {
       if (p.s && US_STATES[p.s]) stateSel.value = p.s;
       if (p.c) countyInp.value = p.c;
       if (p.b) buildType = p.b;
+      if (p.cv) document.getElementById("capValue").value = p.cv;
+      if (p.cu) document.getElementById("capUnit").value = p.cu;
+      if (p.ut) document.getElementById("capUtil").value = p.ut;
     }
+    ["capValue", "capUnit", "capUtil"].forEach((id) =>
+      document.getElementById(id).addEventListener("change", () => {
+        updateUrlHash();
+        if (hasResult) run();
+      })
+    );
 
     document.getElementById("clearDraw").addEventListener("click", () => {
       drawnItems.clearLayers(); drawnLayer = null; setDrawReadout();
@@ -962,6 +998,7 @@
         : badge("proxy", "NATIONAL PROXY");
       const loc = r.location || {};
       const btName = (r.build_type && r.build_type.name) || "";
+      const pw = r.power || {};
       const placeLine = (loc.place || btName)
         ? `<div class="loc">${loc.place || ""}${loc.state_code ? " <span class='badge proxy'>" + loc.state_code + "</span>" : ""}${
             btName ? (loc.place ? " · " : "") + btName + " build" : ""}</div>` : "";
@@ -1025,10 +1062,10 @@
         <div class="metric-grid">
           <div class="m"><div class="k">Footprint ${areaLabel}</div><div class="v">${fmtNum(r.sqft)} <small>sq ft</small></div></div>
           <div class="m"><div class="k">Parcel size</div><div class="v">${fmtNum(r.acres, 2)} <small>acres</small></div></div>
-          <div class="m"><div class="k">Implied power</div><div class="v">${fmtNum(r.implied_mw, 1)} <small>MW</small></div></div>
+          <div class="m"><div class="k">IT capacity ${pw.basis === "stated" ? badge("live", "STATED") : badge("benchmark", "FROM PARCEL")}</div><div class="v">${fmtNum(r.implied_mw, 1)} <small>MW</small></div></div>
+          <div class="m"><div class="k">Annual IT energy</div><div class="v">${fmtNum(pw.it_gwh_per_year)} <small>GWh/yr</small></div></div>
           <div class="m"><div class="k">Est. racks</div><div class="v">${fmtNum(cap.estimated_racks)}</div></div>
           <div class="m"><div class="k">Avg density</div><div class="v">${fmtNum(cap.avg_kw_per_rack, 1)} <small>kW/rack</small></div></div>
-          <div class="m"><div class="k">Steel</div><div class="v">${fmtNum(r.steel_tonnes)} <small>t</small></div></div>
         </div>
 
         <div class="panel-title">Value breakdown (USD)</div>
@@ -1059,6 +1096,17 @@
           scrap-recovery value and not the price of battery-grade products. Component split from WEF/Kearney, "From
           Minerals to Megawatts" (Dec 2025), Fig. 4. Zinc, germanium, rare earths and PGMs are not modelled (no
           citable per-MW data-center figure). STATIC prices are dated benchmarks; see SOURCES.md.</p>
+
+        <div class="panel-title">Power &amp; energy</div>
+        <table>
+          <tr><td>IT capacity driving the metals estimate ${pw.basis === "stated" ? badge("live", "STATED INPUT") : badge("benchmark", "FROM PARCEL")}</td><td class="num">${fmtNum(r.implied_mw, 1)} MW</td></tr>
+          <tr><td>Parcel-implied capacity <span class="role">${fmtNum(r.sqft)} sq ft x ${fmtNum(r.power_density_w_per_sqft)} W/sq ft (${btName})</span></td><td class="num">${fmtNum(pw.parcel_mw, 1)} MW</td></tr>
+          ${pw.basis === "stated" ? `<tr><td>Stated capacity <span class="role">${pw.stated_unit === "gwh" ? fmtNum(pw.stated_value) + " GWh/yr of IT energy at " + fmtNum(pw.utilization * 100) + "% utilization" : "Entered directly"}; implies ~${fmtNum(pw.implied_w_per_sqft)} W/sq ft on this parcel</span></td><td class="num">${fmtNum(pw.stated_mw, 1)} MW</td></tr>` : ""}
+          <tr><td>Annual IT energy <span class="role">MW x 8,760 h x ${fmtNum(pw.utilization * 100)}% avg utilization</span></td><td class="num">${fmtNum(pw.it_gwh_per_year)} GWh/yr</td></tr>
+          <tr><td>Annual facility energy <span class="role">IT energy x PUE ${fmtNum(pw.pue, 2)}; average draw ~${fmtNum(pw.avg_facility_mw, 1)} MW</span></td><td class="num">${fmtNum(pw.facility_gwh_per_year)} GWh/yr</td></tr>
+          ${pw.annual_power_cost_usd != null ? `<tr><td>Indicative annual power cost ${badge("proxy", "NOT IN TOTAL")}<span class="role">At the ${pw.tariff_label} tariff, ${fmtNum(pw.tariff_cents_per_kwh, 2)} c/kWh (US avg ${fmtNum(pw.us_avg_tariff_cents_per_kwh, 2)}). Large sites often contract below this.</span></td><td class="num">${fmtUSD(pw.annual_power_cost_usd)}/yr</td></tr>` : ""}
+        </table>
+        ${pw.check ? `<p class="check${pw.stated_vs_parcel > 1.5 || pw.stated_vs_parcel < 0.67 ? " warn" : ""}">${pw.check}</p>` : ""}
 
         <div class="panel-title">Capacity &amp; cooling (indicative)</div>
         <table>
@@ -1108,6 +1156,7 @@
           <div class="line"><strong>Shell cost:</strong> ${r.price_sources.shell}</div>
           ${r.price_sources.compute_capex ? `<div class="line"><strong>Compute capex reference:</strong> ${r.price_sources.compute_capex}</div>` : ""}
           ${r.price_sources.stainless ? `<div class="line"><strong>Stainless:</strong> ${r.price_sources.stainless}</div>` : ""}
+          <div class="line"><strong>Power layer:</strong> utilization default 67% (California Energy Commission 2024 data-center forecast assumption, used here as an average); PUE from the build type. ${pw.tariff_source ? "Tariff: " + pw.tariff_source : "No state tariff (location outside the US dataset)."} See SOURCES.md 17.</div>
           <div class="line"><strong>Land:</strong> ${r.price_sources.land}</div>
           ${(r.metals || []).map((m) => `<div class="line"><strong>${m.label}:</strong> ${m.price_source}</div>`).join("")}
           ${r.price_sources.aluminum_qty ? `<div class="line"><strong>Aluminum (qty):</strong> ${r.price_sources.aluminum_qty}</div>` : ""}
@@ -1140,6 +1189,13 @@
       if (stateSel.value) body.state = stateSel.value;
       if (countyInp.value.trim()) body.county = countyInp.value.trim();
       body.build_type = buildType;
+      const capV = document.getElementById("capValue").value.trim();
+      if (capV !== "") {
+        body.capacity_value = parseFloat(capV);
+        body.capacity_unit = document.getElementById("capUnit").value;
+      }
+      const capU = document.getElementById("capUtil").value.trim();
+      if (capU !== "") body.utilization = parseFloat(capU) / 100;
       // Pass the confirmed/edited land comparable so the server uses the granular
       // figure instead of the broad-region proxy. If the user never confirmed, we
       // still pass what was auto-detected (the server also re-detects as a backstop).

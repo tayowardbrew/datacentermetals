@@ -160,6 +160,11 @@ def api_estimate():
             live_price_source=metals.source if metals.ok else None,
             live_price_message=metals.message,
             build_type=payload.get("build_type") or DEFAULT_BUILD_TYPE,
+            power_value=payload.get("capacity_value"),
+            power_unit=payload.get("capacity_unit") or "mw",
+            utilization=payload.get("utilization"),
+            state_code=((land_comp or {}).get("detected") or {}).get("state_code")
+            if isinstance(land_comp, dict) else None,
             land_price_per_acre_override=per_acre_override,
             land_comp_label=(land_comp or {}).get("label") if isinstance(land_comp, dict) else None,
             land_comp_source=(land_comp or {}).get("source") if isinstance(land_comp, dict) else None,
