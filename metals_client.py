@@ -1,9 +1,18 @@
 """
 Metals.Dev API client for live industrial-metal spot prices.
 
-Free tier (no credit card) covers copper, aluminum, lead, nickel, zinc, returned
-in USD per metric tonne by default. Docs: https://metals.dev/docs
+One call to /v1/latest returns every metal Metals.Dev supports: base metals
+(copper, aluminum, lead, nickel, zinc) and precious metals (gold, silver,
+platinum, palladium). Docs: https://metals.dev/docs , symbols: https://metals.dev/symbols
 Endpoint: https://api.metals.dev/v1/latest?api_key=<KEY>&currency=USD&unit=mt
+
+With unit=mt every metal (precious included) is quoted in USD per metric tonne;
+we still read the response's own "unit" field and normalise defensively, because
+precious metals default to troy ounces if the unit is ever ignored.
+
+Metals.Dev does NOT carry tin, cobalt, lithium, gallium or steel. Those are priced
+from dated static benchmarks in metals_mix.py (labelled STATIC everywhere), rather
+than adding a second, unrelated price provider. See SOURCES.md entry 14.
 
 The API key is read from the METALS_DEV_API_KEY environment variable. If it is
 missing, this module returns a clear "no API key configured" result rather than
@@ -19,13 +28,22 @@ import urllib.parse
 METALS_DEV_LATEST_URL = "https://api.metals.dev/v1/latest"
 ENV_KEY = "METALS_DEV_API_KEY"
 
+# Metals we read from the single /v1/latest call (all on Metals.Dev's symbol list).
+# zinc / platinum / palladium are available too but are not modelled (no citable
+# per-MW data-center intensity was found; see SOURCES.md entry 14).
+LIVE_METALS = ("copper", "aluminum", "nickel", "lead", "silver", "gold")
+
+# Multipliers to convert a quoted price into USD per metric tonne.
+TROY_OZ_PER_TONNE = 32_150.7466
+_UNIT_TO_PER_TONNE = {"mt": 1.0, "kg": 1_000.0, "g": 1_000_000.0, "toz": TROY_OZ_PER_TONNE}
+
 
 class MetalsResult:
     """Outcome of a live-price fetch attempt."""
 
     def __init__(self, ok, prices=None, source=None, message=None):
         self.ok = ok
-        # prices: dict like {"copper": 9100.0, "aluminum": 2400.0} in USD/tonne
+        # prices: dict like {"copper": 9100.0, "gold": 1.2e8, ...} in USD/tonne
         self.prices = prices or {}
         self.source = source or "Metals.Dev API"
         self.message = message
@@ -36,7 +54,7 @@ class MetalsResult:
 
 def get_metal_prices(timeout=10):
     """
-    Fetch latest copper/aluminum prices in USD per metric tonne.
+    Fetch latest prices for every LIVE_METALS entry, in USD per metric tonne.
 
     Returns a MetalsResult. Never raises for the expected failure modes
     (missing key, network error, bad response) — those come back as
@@ -88,17 +106,18 @@ def get_metal_prices(timeout=10):
         )
 
     metals = data.get("metals", {})
+    factor = _UNIT_TO_PER_TONNE.get(str(data.get("unit", "mt")).lower(), 1.0)
     prices = {}
-    for m in ("copper", "aluminum"):
+    for m in LIVE_METALS:
         val = metals.get(m)
-        if isinstance(val, (int, float)):
-            prices[m] = float(val)
+        if isinstance(val, (int, float)) and val > 0:
+            prices[m] = float(val) * factor
 
     if not prices:
         return MetalsResult(
             ok=False,
             source="Metals.Dev API",
-            message="Metals.Dev response did not include copper/aluminum prices.",
+            message="Metals.Dev response did not include any of the expected metal prices.",
         )
 
     ts = data.get("timestamps", {}).get("metal", "latest")

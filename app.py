@@ -146,10 +146,8 @@ def api_estimate():
         if isinstance(v, (int, float)) and v > 0:
             per_acre_override = float(v)
 
-    # --- Live copper/aluminum prices (graceful on missing key/network) ---
+    # --- Live metal prices (graceful on missing key/network) ---
     metals = get_metal_prices()
-    copper_price = metals.price("copper") if metals.ok else None
-    aluminum_price = metals.price("aluminum") if metals.ok else None
 
     try:
         est = estimate_site(
@@ -157,10 +155,9 @@ def api_estimate():
             lng=lng,
             sqft=sqft,
             region=region,
-            copper_price_usd_per_tonne=copper_price,
-            copper_price_source=metals.source if metals.ok else metals.message,
-            aluminum_price_usd_per_tonne=aluminum_price,
-            aluminum_price_source=metals.source if metals.ok else metals.message,
+            live_prices=metals.prices if metals.ok else {},
+            live_price_source=metals.source if metals.ok else None,
+            live_price_message=metals.message,
             land_price_per_acre_override=per_acre_override,
             land_comp_label=(land_comp or {}).get("label") if isinstance(land_comp, dict) else None,
             land_comp_source=(land_comp or {}).get("source") if isinstance(land_comp, dict) else None,

@@ -13,6 +13,11 @@ logic stays testable and deterministic.
 from dataclasses import dataclass, field, asdict
 
 from capacity import estimate_capacity
+from metals_mix import (
+    compute_metals,
+    BASE_STEEL_TONNES_PER_SQFT,
+    COPPER_TONNES_PER_MW_HEADLINE,
+)
 
 # --- Benchmark assumptions (see SOURCES.md for provenance) ---
 
@@ -22,7 +27,7 @@ POWER_DENSITY_W_PER_SQFT = 250.0
 
 # Steel intensity (metric tons per square foot). Midpoint of 0.014-0.018.
 # Source: Data Centre Magazine / impactECI.
-STEEL_TONNES_PER_SQFT = 0.016
+STEEL_TONNES_PER_SQFT = BASE_STEEL_TONNES_PER_SQFT  # 0.016; single source of truth in metals_mix.py
 
 # Copper intensity (tonnes per MW). Lower bound = facility-only rule of thumb;
 # default = including near-site power connections (anchored on Microsoft's
@@ -30,7 +35,7 @@ STEEL_TONNES_PER_SQFT = 0.016
 # independently by WEF/Kearney Dec 2025 Figure 4 (facility-only sum ~11.6 t/MW,
 # within 3% of the 12 t/MW figure here). See SOURCES.md entry 3.
 COPPER_TONNES_PER_MW_FACILITY = 12.0
-COPPER_TONNES_PER_MW_WITH_GRID = 26.0
+COPPER_TONNES_PER_MW_WITH_GRID = COPPER_TONNES_PER_MW_HEADLINE  # 26.0; see metals_mix.py
 
 # Concrete intensity (cubic meters per MW). Midpoint of 500-1,000.
 # Source: impactECI / Cushman & Wakefield. Shown as a physical quantity only,
@@ -214,6 +219,23 @@ class Estimate:
     shell_cost_usd: float = 0.0
     total_site_value_usd: float = 0.0
 
+    # Expanded metals coverage (11 metals) with the facility / compute split.
+    # Each row: tonnes and contained-metal value on each side + price provenance.
+    metals: list = field(default_factory=list)
+    metals_excluded: list = field(default_factory=list)
+    nickel_cost_usd: float = 0.0
+    lead_cost_usd: float = 0.0
+    other_metals_cost_usd: float = 0.0
+
+    # Value split. FACILITY = campus / shell infrastructure (land + shell +
+    # metals in cooling, electrical, backup power, structure and near-site power
+    # connections). COMPUTE = metals contained in the servers / chips / racks and
+    # networking housed inside. total_site_value_usd = facility + compute.
+    facility_metals_usd: float = 0.0
+    compute_metals_usd: float = 0.0
+    facility_value_usd: float = 0.0
+    compute_value_usd: float = 0.0
+
     # Capacity / cooling (indicative) — populated from capacity.py
     capacity: dict = field(default_factory=dict)
 
@@ -226,16 +248,17 @@ class Estimate:
         return asdict(self)
 
 
-def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
-                  copper_price_source, aluminum_price_usd_per_tonne=None,
-                  aluminum_price_source=None, land_price_per_acre_override=None,
+def estimate_site(lat, lng, sqft, region="national", live_prices=None,
+                  live_price_source=None, live_price_message=None,
+                  land_price_per_acre_override=None,
                   land_comp_label=None, land_comp_source=None):
     """
     Build the full site estimate.
 
-    copper_price_usd_per_tonne may be None if no live price is available
-    (e.g. no API key). In that case the copper cost line is reported as
-    unavailable rather than fabricated, and it is excluded from the total.
+    live_prices: {metal_key: usd_per_tonne} from metals_client (may be empty if
+    no API key / network). Any live-priced metal without a price is reported as
+    unavailable rather than fabricated, and excluded from the total; its tonnage
+    is still shown. Metals Metals.Dev does not carry use dated static benchmarks.
 
     land_price_per_acre_override, when supplied (from the granular, auto-detected
     and user-confirmed land comparable), replaces the broad-region proxy for the
@@ -247,9 +270,8 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
 
     # Physical quantities
     est.implied_mw = (sqft * POWER_DENSITY_W_PER_SQFT) / 1_000_000.0
-    est.steel_tonnes = sqft * STEEL_TONNES_PER_SQFT
-    est.copper_tonnes_facility = est.implied_mw * COPPER_TONNES_PER_MW_FACILITY
-    est.copper_tonnes_with_grid = est.implied_mw * COPPER_TONNES_PER_MW_WITH_GRID
+    mw = est.implied_mw
+    est.copper_tonnes_facility = mw * COPPER_TONNES_PER_MW_FACILITY
     est.concrete_m3 = est.implied_mw * CONCRETE_M3_PER_MW
     est.concrete_tonnes = est.concrete_m3 * CONCRETE_TONNES_PER_M3
     est.acres = sqft / SQFT_PER_ACRE
@@ -260,7 +282,14 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
 
     # Aluminum: WEF/Kearney Dec 2025 whole-facility per-MW figure (reputable
     # secondary, named attribution). Priced live via Metals.Dev when available.
-    est.aluminum_tonnes = est.implied_mw * ALUMINUM_TONNES_PER_MW
+    # Expanded metals (metals_mix.py): 11 metals, each split facility / compute.
+    mix = compute_metals(mw, live_prices=live_prices, live_source=live_price_source)
+    est.metals = mix["metals"]
+    est.metals_excluded = mix["excluded"]
+    by = {r["key"]: r for r in mix["metals"]}
+    est.steel_tonnes = by["steel"]["total_t"]
+    est.copper_tonnes_with_grid = by["copper"]["total_t"]
+    est.aluminum_tonnes = by["aluminum"]["total_t"]
 
     # Battery-backup (UPS) metals.
     #  (a) HEADLINE: WEF/Kearney Dec 2025 top-down kg/MW (real fleet mix, incl.
@@ -298,48 +327,25 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
             "See SOURCES.md."
         )
 
-    # Steel cost (static price, clearly labeled)
-    est.steel_cost_usd = est.steel_tonnes * STATIC_STEEL_PRICE_USD_PER_TONNE
-    est.price_sources["steel"] = (
-        f"STATIC benchmark ${STATIC_STEEL_PRICE_USD_PER_TONNE:,.0f}/tonne "
-        "(steel not on Metals.Dev free tier). Not a live quote."
+    # Per-metal costs (contained-metal value; facility + compute combined). Legacy
+    # per-metal fields are kept for API compatibility.
+    est.steel_cost_usd = by["steel"]["total_usd"]
+    est.copper_cost_usd = by["copper"]["total_usd"]
+    est.aluminum_cost_usd = by["aluminum"]["total_usd"]
+    est.nickel_cost_usd = by["nickel"]["total_usd"]
+    est.lead_cost_usd = by["lead"]["total_usd"]
+    est.other_metals_cost_usd = sum(
+        r["total_usd"] for r in mix["metals"]
+        if r["key"] not in ("steel", "copper", "aluminum", "nickel", "lead")
     )
-
-    # Copper cost (live price if available). Use the with-grid tonnage as the
-    # headline priced figure.
-    if copper_price_usd_per_tonne is not None:
-        est.copper_cost_usd = est.copper_tonnes_with_grid * copper_price_usd_per_tonne
-        est.price_sources["copper"] = (
-            f"LIVE price ${copper_price_usd_per_tonne:,.2f}/tonne "
-            f"via {copper_price_source}."
-        )
-    else:
-        est.copper_cost_usd = 0.0
-        est.price_sources["copper"] = (
-            f"Live copper price unavailable ({copper_price_source}). "
-            "Copper cost excluded from total."
-        )
+    for r in mix["metals"]:
+        est.price_sources[r["key"]] = r["price_source"]
+    if est.metals_excluded:
         est.notes.append(
-            "Copper cost could not be priced (no live price available), so it is "
-            "excluded from the total site value. Configure METALS_DEV_API_KEY to "
-            "include it."
-        )
-
-    # Aluminum cost (live price if available). Priced on the WEF/Kearney whole-
-    # facility per-MW tonnage (Dec 2025, Bank of America Securities/IEA/Kearney).
-    if aluminum_price_usd_per_tonne is not None:
-        est.aluminum_cost_usd = est.aluminum_tonnes * aluminum_price_usd_per_tonne
-        est.price_sources["aluminum"] = (
-            f"LIVE price ${aluminum_price_usd_per_tonne:,.2f}/tonne via "
-            f"{aluminum_price_source}, on {ALUMINUM_TONNES_PER_MW:.1f} t/MW "
-            f"(WEF/Kearney 'From Minerals to Megawatts', Dec 2025, Fig. 4; "
-            f"source: Bank of America Securities/IEA/Kearney). See SOURCES.md."
-        )
-    else:
-        est.aluminum_cost_usd = 0.0
-        est.price_sources["aluminum"] = (
-            f"Live aluminum price unavailable ({aluminum_price_source}). "
-            "Aluminum cost excluded from total (tonnage still shown)."
+            "No live price was available for: " + ", ".join(est.metals_excluded) +
+            f" ({live_price_message or 'Metals.Dev unavailable'}). Their tonnage is "
+            "shown but their value is excluded from the total. Configure "
+            "METALS_DEV_API_KEY to include them."
         )
 
     # Shell / base-building construction cost (excludes the power/M&E chain, which
@@ -357,12 +363,12 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
         f"copper / steel / MW figures. See SOURCES.md."
     )
 
-    # Battery-backup (UPS) metals provenance. Not priced into the total: there is
-    # no clean live spot price for battery-grade lithium/cobalt/lead on the
-    # Metals.Dev free tier (nickel IS on the free tier but as LME nickel metal, not
-    # battery sulfate, so pricing it would be misleading). Shown as physical
-    # quantities for the battery-metals thesis, with both the top-down headline and
-    # the bottom-up lower-bound cross-check so the sizing assumption is visible.
+    # Battery-backup (UPS) metals provenance. The physical quantities below are the
+    # backup-power slice of the expanded metals table; that table prices them as
+    # CONTAINED METAL (refined-metal reference price), which is not the price of
+    # battery-grade products (nickel sulphate, lithium carbonate). This panel keeps
+    # both the top-down headline and the bottom-up lower-bound cross-check so the
+    # sizing assumption is visible.
     est.price_sources["battery"] = (
         f"HEADLINE (WEF/Kearney 'From Minerals to Megawatts', Dec 2025, Fig. 4; "
         f"source: Bank of America Securities/IEA/Kearney): Li {est.battery_lithium_kg:,.0f} kg, "
@@ -375,35 +381,41 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
         f"Co {est.battery_cobalt_kg_lowerbound:,.0f} kg (LFP alt: Li "
         f"{est.battery_lithium_kg_lfp_lowerbound:,.0f} kg, no Ni/Co) — the lower-bound comes out "
         f"~3-4x below the WEF headline, consistent with WEF assuming a longer effective runtime / "
-        f"N+1 redundancy / blended fleet rather than a bare 5-minute minimum. Physical quantities "
-        f"only — small at data-center-UPS scale, far larger for grid-scale BESS co-located with a "
-        f"data center. See SOURCES.md."
+        f"N+1 redundancy / blended fleet rather than a bare 5-minute minimum. Small at "
+        f"data-center-UPS scale, far larger for grid-scale BESS co-located with a data center. "
+        f"Headline quantities are priced as contained metal in the metals table. See SOURCES.md."
     )
     est.notes.append(
         "Battery-backup (UPS) metal quantities are small because data-center UPS "
         "only bridges minutes to generator start — unlike grid-scale BESS. Two "
         "figures are shown (WEF/Kearney top-down headline + our own bottom-up "
-        "lower-bound cross-check) to make the sizing assumption visible. Not "
-        "priced; shown to connect the build to the battery-metals / PGM mining angle."
+        "lower-bound cross-check) to make the sizing assumption visible. Their "
+        "contained-metal value is included in the expanded metals table (headline "
+        "basis), not as battery-grade product value."
     )
 
     # Aluminum provenance context (tonnage basis).
     est.price_sources["aluminum_qty"] = (
-        f"{est.aluminum_tonnes:,.1f} t = {ALUMINUM_TONNES_PER_MW:.1f} t/MW x "
-        f"{est.implied_mw:,.1f} MW. Whole-facility figure (cooling + servers + "
-        f"backup + electrical + networking) from WEF/Kearney 'From Minerals to "
-        f"Megawatts' (Dec 2025), Fig. 4. See SOURCES.md."
+        f"{est.aluminum_tonnes:,.1f} t = {est.aluminum_tonnes / mw if mw else 0:.1f} t/MW x "
+        f"{mw:,.1f} MW. Whole-facility figure (cooling + servers + backup + "
+        f"electrical + networking) from WEF/Kearney 'From Minerals to Megawatts' "
+        f"(Dec 2025), Fig. 4. See SOURCES.md."
     )
 
-    # Totals. Headline total = land + priced materials (steel + copper + aluminum)
-    # + shell base-building cost. Battery metals and concrete are physical-quantity
-    # context lines and are NOT priced into the total.
-    est.material_cost_usd = (
-        est.steel_cost_usd + est.copper_cost_usd + est.aluminum_cost_usd
+    # Totals. Headline total = land + shell base-building cost + contained-metal
+    # value of all priced metals. Concrete (and stainless, where modelled) are
+    # physical-quantity context lines and are NOT priced into the total.
+    #
+    # Split: FACILITY (campus / shell infrastructure) = land + shell + facility-side
+    # metals; COMPUTE (equipment housed inside) = compute-side metals.
+    est.material_cost_usd = mix["metals_usd"]
+    est.facility_metals_usd = mix["facility_metals_usd"]
+    est.compute_metals_usd = mix["compute_metals_usd"]
+    est.facility_value_usd = (
+        est.land_value_usd + est.shell_cost_usd + est.facility_metals_usd
     )
-    est.total_site_value_usd = (
-        est.land_value_usd + est.material_cost_usd + est.shell_cost_usd
-    )
+    est.compute_value_usd = est.compute_metals_usd
+    est.total_site_value_usd = est.facility_value_usd + est.compute_value_usd
 
     est.google_maps_url = f"https://www.google.com/maps?q={lat},{lng}"
 

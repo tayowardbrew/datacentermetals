@@ -171,6 +171,21 @@
     .headline .cell .loc { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
     .headline .cell .v small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
 
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: -6px 0 16px; }
+    @media (max-width: 560px) { .split { grid-template-columns: 1fr; } }
+    .split .cell { background: var(--navy-2); padding: 13px 16px; border-top: 2px solid var(--petrol); }
+    .split .cell:first-child { border-top-color: var(--teal); }
+    .split .k { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+    .split .v { font-size: 1.3rem; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .split .v small { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+    .split .d { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
+    tr.grp td { font-weight: 700; color: var(--teal); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; padding-top: 14px; }
+    tr.grp td small { color: var(--muted); font-weight: 600; }
+    .tablewrap { overflow-x: auto; }
+    table.metals td { font-size: 0.84rem; }
+    table.metals tr.th td { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
+    table.metals .sym { color: var(--muted); font-size: 0.74rem; }
+    table.metals .role { display: block; color: var(--muted); font-size: 0.74rem; margin-top: 2px; }
     .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
     @media (max-width: 560px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
     .metric-grid .m { background: var(--navy-2); padding: 13px 14px; }
@@ -219,9 +234,10 @@
         </div>
       </div>
       <p class="lede">Search a location, draw a candidate parcel on satellite imagery, and estimate its implied
-        power capacity, materials intensity (steel, copper, aluminum and battery-backup metals), shell construction
-        cost, rack capacity and typical cooling method — with an auto-detected, confirmable land comparable, resolved
-        to an implied site value in today's commodity terms.</p>
+        power capacity, the tonnage and value of 11 metals (from steel, copper and aluminum to tin, gold and gallium),
+        shell construction cost, rack capacity and typical cooling method — with a state- and county-level land
+        comparable, resolved to an implied site value in today's commodity terms, split between the facility and
+        the compute equipment inside it.</p>
       <p><strong>Thesis:</strong> an early, defensible estimate of a data center site's implied collateral value
         can support an asset-backed debt argument before or during construction, applying a commodities /
         materials-intensity lens to AI infrastructure.</p>
@@ -320,7 +336,7 @@
     <div class="footer-inner">
       <strong>Methodology &amp; provenance.</strong> Every benchmark figure (power density, steel &amp; copper
       intensity, shell cost, rack density, cooling thresholds, land proxy) is documented in SOURCES.md with its
-      source, URL and last-verified date. Live copper pricing is a genuine API call to Metals.Dev; where a live
+      source, URL and last-verified date. Live metal pricing (copper, aluminum, nickel, lead, silver, gold) is a genuine API call to Metals.Dev; where a live
       price or source is unavailable, that line is excluded and labelled rather than fabricated. Land value is a
       state / county-level comparable (quoted county DC-land deal, else the state's USDA raw-land floor), not a
       parcel-level appraisal. This is a portfolio MVP, not a formal valuation.
@@ -401,6 +417,13 @@
     const fmtUSD = (n) => (n == null ? "n/a" : "$" + Math.round(n).toLocaleString("en-US"));
     const fmtNum = (n, d = 0) =>
       n == null ? "n/a" : Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
+
+    // Tonnes for big quantities, kg for the small (precious / battery) ones.
+    const fmtMass = (t) => t == null ? "n/a"
+      : t === 0 ? "—"
+      : t >= 10 ? fmtNum(t) + " t"
+      : t >= 1 ? fmtNum(t, 1) + " t"
+      : fmtNum(t * 1000, t * 1000 >= 10 ? 0 : 1) + " kg";
 
     function setDrawReadout() {
       const ro = document.getElementById("drawReadout");
@@ -800,8 +823,6 @@
     const badge = (kind, text) => `<span class="badge ${kind}">${text}</span>`;
 
     function render(r) {
-      const copperLive = r.metals_status.ok;
-      const aluminumLive = r.metals_status.ok && r.aluminum_cost_usd > 0;
       const cap = r.capacity || {};
       const areaLabel = r.area_source === "drawn_polygon"
         ? badge("live", "FROM DRAWN AREA")
@@ -817,21 +838,40 @@
       const placeLine = loc.place
         ? `<div class="loc">${loc.place}${loc.state_code ? " <span class='badge proxy'>" + loc.state_code + "</span>" : ""}</div>` : "";
 
-      // Value components for the comparative bars (copper/aluminum may be excluded).
-      const comps = [
-        ["Shell / base-building cost", r.shell_cost_usd, badge("benchmark", "BENCHMARK, EXCL. POWER")],
+      // Value split: FACILITY (campus / shell infrastructure) vs COMPUTE (equipment).
+      const metalsBadge = badge("benchmark", "CONTAINED METAL");
+      const facRows = [
         ["Land value", r.land_value_usd, landBadge],
-        ["Steel cost", r.steel_cost_usd, badge("static", "STATIC PRICE")],
+        ["Shell / base-building cost", r.shell_cost_usd, badge("benchmark", "BENCHMARK, EXCL. POWER")],
+        ["Metals in facility systems", r.facility_metals_usd, metalsBadge],
       ];
-      if (copperLive) comps.push(["Copper cost", r.copper_cost_usd, badge("live", "LIVE PRICE")]);
-      if (aluminumLive) comps.push(["Aluminum cost", r.aluminum_cost_usd, badge("live", "LIVE PRICE")]);
-      const maxComp = Math.max(...comps.map((c) => c[1] || 0), 1);
+      const compRows = [
+        ["Metals in compute equipment", r.compute_metals_usd, metalsBadge],
+      ];
+      const maxComp = Math.max(...facRows.concat(compRows).map((c) => c[1] || 0), 1);
+      const tot = r.total_site_value_usd || 0;
+      const pct = (v) => (tot > 0 ? fmtNum((v / tot) * 100, 1) + "%" : "");
+      const groupRow = (label, v) =>
+        `<tr class="grp"><td>${label}</td><td class="num">${fmtUSD(v)} <small>${pct(v)}</small></td></tr>`;
 
       let rentcastRow = "";
       if (r.rentcast.ok) {
-        rentcastRow = `<tr><td>RentCast AVM (secondary) ${badge("live", "LIVE")}</td>
+        rentcastRow = `<tr><td>RentCast AVM (secondary, not in total) ${badge("live", "LIVE")}</td>
           <td class="num">${fmtUSD(r.rentcast.value_usd)}</td></tr>`;
       }
+      const excludedRow = (r.metals_excluded && r.metals_excluded.length)
+        ? `<tr><td colspan="2" class="note">No live price (excluded from value, tonnage still shown): ${r.metals_excluded.join(", ")}.</td></tr>` : "";
+
+      // Expanded metals table (11 metals, facility vs compute).
+      const priceBadge = (m) => m.price_kind === "live" ? badge("live", "LIVE")
+        : m.price_kind === "static" ? badge("static", "STATIC") : badge("proxy", "NO PRICE");
+      const metalRows = (r.metals || []).map((m) => `<tr>
+          <td><strong>${m.label}</strong> <span class="sym">${m.symbol}</span> ${priceBadge(m)}
+            <span class="role">${m.role}</span></td>
+          <td class="num">${fmtMass(m.facility_t)}</td>
+          <td class="num">${fmtMass(m.compute_t)}</td>
+          <td class="num">${m.priced ? fmtUSD(m.total_usd) : "excluded"}</td>
+        </tr>`).join("");
 
       const html = `
         <div class="headline">
@@ -839,6 +879,18 @@
             <div class="k">Total implied site value today</div>
             <div class="v">${fmtUSD(r.total_site_value_usd)}</div>
             ${placeLine}
+          </div>
+        </div>
+        <div class="split">
+          <div class="cell">
+            <div class="k">Facility / campus infrastructure</div>
+            <div class="v">${fmtUSD(r.facility_value_usd)} <small>${pct(r.facility_value_usd)}</small></div>
+            <div class="d">Land, shell, and metals in cooling, power, backup and structure</div>
+          </div>
+          <div class="cell">
+            <div class="k">Compute equipment</div>
+            <div class="v">${fmtUSD(r.compute_value_usd)} <small>${pct(r.compute_value_usd)}</small></div>
+            <div class="d">Metals in servers, chips, racks and networking</div>
           </div>
         </div>
 
@@ -853,12 +905,29 @@
 
         <div class="panel-title">Value breakdown (USD)</div>
         <table>
-          ${comps.map((c) => barRow(c[0], c[1], maxComp, c[2])).join("")}
+          ${groupRow("Facility / campus infrastructure", r.facility_value_usd)}
+          ${facRows.map((c) => barRow(c[0], c[1], maxComp, c[2])).join("")}
+          ${groupRow("Compute equipment", r.compute_value_usd)}
+          ${compRows.map((c) => barRow(c[0], c[1], maxComp, c[2])).join("")}
+          ${excludedRow}
           ${rentcastRow}
-          ${!copperLive ? `<tr><td>Copper cost ${badge("static", "NO LIVE PRICE")}</td><td class="num">excluded</td></tr>` : ""}
-          ${!aluminumLive ? `<tr><td>Aluminum cost ${badge("static", "NO LIVE PRICE")}</td><td class="num">excluded</td></tr>` : ""}
           <tr class="total"><td>Total implied site value</td><td class="num">${fmtUSD(r.total_site_value_usd)}</td></tr>
         </table>
+        <p class="note">Compute is valued here on the same commodity basis as the rest of the tool: the metal
+          contained in the servers and network gear, not what the equipment would cost to buy.</p>
+
+        <div class="panel-title">Metals: facility vs compute</div>
+        <div class="tablewrap">
+        <table class="metals">
+          <tr class="th"><td>Metal</td><td class="num">Facility</td><td class="num">Compute</td><td class="num">Value</td></tr>
+          ${metalRows}
+          <tr class="total"><td>All priced metals</td><td class="num"></td><td class="num"></td><td class="num">${fmtUSD(r.material_cost_usd)}</td></tr>
+        </table>
+        </div>
+        <p class="note">Values are <strong>contained metal</strong> at spot or reference prices (tonnes x price), not
+          scrap-recovery value and not the price of battery-grade products. Component split from WEF/Kearney, "From
+          Minerals to Megawatts" (Dec 2025), Fig. 4. Zinc, germanium, rare earths and PGMs are not modelled (no
+          citable per-MW data-center figure). STATIC prices are dated benchmarks; see SOURCES.md.</p>
 
         <div class="panel-title">Capacity &amp; cooling (indicative)</div>
         <table>
@@ -871,14 +940,14 @@
 
         <div class="panel-title">Materials intensity</div>
         <table>
-          <tr><td>Steel required ${badge("benchmark", "BENCHMARK")}</td><td class="num">${fmtNum(r.steel_tonnes)} t</td></tr>
-          <tr><td>Copper (facility-only)</td><td class="num">${fmtNum(r.copper_tonnes_facility)} t</td></tr>
+          <tr><td>Steel (building + server chassis) ${badge("benchmark", "BENCHMARK")}</td><td class="num">${fmtNum(r.steel_tonnes)} t</td></tr>
+          <tr><td>Copper (excl. near-site power)</td><td class="num">${fmtNum(r.copper_tonnes_facility)} t</td></tr>
           <tr><td>Copper (incl. near-site power) ${badge("benchmark", "BENCHMARK")}</td><td class="num">${fmtNum(r.copper_tonnes_with_grid)} t</td></tr>
           <tr><td>Aluminum (whole-facility) ${badge("benchmark", "WEF/KEARNEY, DEC 2025")}</td><td class="num">${fmtNum(r.aluminum_tonnes, 1)} t</td></tr>
           <tr><td>Concrete (context only, not priced)</td><td class="num">${fmtNum(r.concrete_m3)} m³ / ${fmtNum(r.concrete_tonnes)} t</td></tr>
         </table>
 
-        <div class="panel-title">Battery-backup (UPS) metals ${badge("proxy", "NOT PRICED")}</div>
+        <div class="panel-title">Battery-backup (UPS) metals ${badge("proxy", "DETAIL")}</div>
         <table>
           <tr><td colspan="2" style="color:var(--teal);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;padding-top:12px;">Headline — WEF/Kearney (real fleet mix)</td></tr>
           <tr><td>Lithium</td><td class="num">${fmtNum(r.battery_lithium_kg)} kg</td></tr>
@@ -896,17 +965,16 @@
         <p class="note">Battery-metal tonnage is deliberately <strong>small</strong>: data-center UPS only bridges
           minutes to generator start, unlike grid-scale BESS. The headline (WEF/Kearney, Dec 2025, Bank of America
           Securities/IEA/Kearney analysis) reflects the real fleet mix and comes out ~3-4x above our own 5-minute
-          bottom-up cross-check — shown so the sizing assumption is visible, not hidden. Not priced into the total;
-          shown to connect the build to the battery-metals / PGM mining angle. The tonnage would be orders of
+          bottom-up cross-check — shown so the sizing assumption is visible, not hidden. The headline quantities are
+          valued as contained metal in the metals table above (not as battery-grade product); shown here to connect
+          the build to the battery-metals / PGM mining angle. The tonnage would be orders of
           magnitude larger for a co-located grid-storage project.</p>
 
         <div class="provenance">
           <div class="line"><strong>Commodity pricing:</strong> ${r.metals_status.ok ? "LIVE" : "unavailable"} — ${r.metals_status.source}${r.metals_status.message ? " — " + r.metals_status.message : ""}</div>
           <div class="line"><strong>Shell cost:</strong> ${r.price_sources.shell}</div>
           <div class="line"><strong>Land:</strong> ${r.price_sources.land}</div>
-          <div class="line"><strong>Steel:</strong> ${r.price_sources.steel}</div>
-          <div class="line"><strong>Copper:</strong> ${r.price_sources.copper}</div>
-          ${r.price_sources.aluminum ? `<div class="line"><strong>Aluminum (price):</strong> ${r.price_sources.aluminum}</div>` : ""}
+          ${(r.metals || []).map((m) => `<div class="line"><strong>${m.label}:</strong> ${m.price_source}</div>`).join("")}
           ${r.price_sources.aluminum_qty ? `<div class="line"><strong>Aluminum (qty):</strong> ${r.price_sources.aluminum_qty}</div>` : ""}
           ${r.price_sources.battery ? `<div class="line"><strong>Battery metals:</strong> ${r.price_sources.battery}</div>` : ""}
           ${lc.dc_premium_note ? `<div class="line"><strong>Land tier:</strong> ${lc.dc_premium_note}</div>` : ""}
@@ -920,9 +988,10 @@
           deliberately EXCLUDES the IT power / electrical / mechanical chain</strong> (already captured via the
           MW / copper / steel figures) to avoid double-counting. Land value is an <strong>auto-detected comparable
           (county DC-land transaction, else the state agricultural floor), not a parcel-level appraisal</strong>
-          — confirm or override it above. Rack count and cooling method are indicative rules of thumb. Concrete and
-          battery-backup metals are shown for context and not priced into the total. Aluminum and battery-metal
-          intensity are sourced from WEF/Kearney, "From Minerals to Megawatts" (Dec 2025).
+          — confirm or override it above. Rack count and cooling method are indicative rules of thumb. Concrete is
+          shown for context and not priced into the total. Metal intensities by component (cooling, electrical,
+          backup, servers, networking) are from WEF/Kearney, "From Minerals to Megawatts" (Dec 2025); metals are
+          valued as contained metal, not recoverable scrap.
         </div>`;
       document.getElementById("output").innerHTML = html;
     }
