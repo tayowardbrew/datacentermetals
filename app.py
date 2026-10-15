@@ -10,6 +10,7 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 
 from estimator import estimate_site, ValidationError
+from build_types import public_profiles, DEFAULT_BUILD_TYPE
 from metals_client import get_metal_prices
 from land_value import get_rentcast_value
 from land_prices import lookup_land_comp, lookup_land_comp_for_place
@@ -158,6 +159,7 @@ def api_estimate():
             live_prices=metals.prices if metals.ok else {},
             live_price_source=metals.source if metals.ok else None,
             live_price_message=metals.message,
+            build_type=payload.get("build_type") or DEFAULT_BUILD_TYPE,
             land_price_per_acre_override=per_acre_override,
             land_comp_label=(land_comp or {}).get("label") if isinstance(land_comp, dict) else None,
             land_comp_source=(land_comp or {}).get("source") if isinstance(land_comp, dict) else None,
@@ -206,6 +208,12 @@ def api_estimate():
     }
 
     return jsonify(result)
+
+
+@app.route("/api/build-types", methods=["GET"])
+def api_build_types():
+    """The three build-type profiles (copy + the numbers that drive the estimate)."""
+    return jsonify({"default": DEFAULT_BUILD_TYPE, "build_types": public_profiles()})
 
 
 @app.route("/api/health")

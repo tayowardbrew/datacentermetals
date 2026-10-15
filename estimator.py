@@ -13,6 +13,7 @@ logic stays testable and deterministic.
 from dataclasses import dataclass, field, asdict
 
 from capacity import estimate_capacity
+from build_types import get_build_type, BUILD_TYPES, DEFAULT_BUILD_TYPE
 from metals_mix import (
     compute_metals,
     BASE_STEEL_TONNES_PER_SQFT,
@@ -23,7 +24,7 @@ from metals_mix import (
 
 # Power density (watts per square foot of building space). Mid-range of the
 # 200-400 W/sq ft modern-facility band. Source: TierPoint / Cadence.
-POWER_DENSITY_W_PER_SQFT = 250.0
+POWER_DENSITY_W_PER_SQFT = 250.0  # = the 'hyperscale' build type in build_types.py (keep in sync)
 
 # Steel intensity (metric tons per square foot). Midpoint of 0.014-0.018.
 # Source: Data Centre Magazine / impactECI.
@@ -116,7 +117,7 @@ STATIC_STEEL_PRICE_USD_PER_TONNE = 900.0
 # facility (~$1.0-2.1M/MW; JLL's single-tenant ~50 MW air-cooled shell-and-core
 # figure sits near ~$1.5M/MW, and this is ~12-15% of a ~$10-14M/MW all-in hard
 # cost). 1.5 = a defensible mid-band default. See SOURCES.md entry 9.
-SHELL_COST_USD_PER_MW = 1_500_000.0
+SHELL_COST_USD_PER_MW = 1_500_000.0  # = the 'hyperscale' build type; others in build_types.py
 
 # Broad commercial/industrial land price proxies (USD per acre).
 # Generic industrial land proxy, NOT power-ready data-center-premium land.
@@ -185,8 +186,13 @@ class Estimate:
     sqft: float
     region: str
 
+    # Build type (see build_types.py): which archetype drove the metals mix.
+    build_type: dict = field(default_factory=dict)
+    power_density_w_per_sqft: float = 0.0
+
     # Derived physical quantities
     implied_mw: float = 0.0
+    stainless_tonnes: float = 0.0  # liquid-cooling pipework; quantity only, not priced
     steel_tonnes: float = 0.0
     copper_tonnes_facility: float = 0.0
     copper_tonnes_with_grid: float = 0.0
@@ -227,6 +233,10 @@ class Estimate:
     lead_cost_usd: float = 0.0
     other_metals_cost_usd: float = 0.0
 
+    # Indicative compute-hardware capex (REFERENCE ONLY, never in the total). Only
+    # populated for build types with a sourced figure.
+    compute_capex_reference_usd: float = None
+
     # Value split. FACILITY = campus / shell infrastructure (land + shell +
     # metals in cooling, electrical, backup power, structure and near-site power
     # connections). COMPUTE = metals contained in the servers / chips / racks and
@@ -250,6 +260,7 @@ class Estimate:
 
 def estimate_site(lat, lng, sqft, region="national", live_prices=None,
                   live_price_source=None, live_price_message=None,
+                  build_type=DEFAULT_BUILD_TYPE,
                   land_price_per_acre_override=None,
                   land_comp_label=None, land_comp_source=None):
     """
@@ -265,14 +276,28 @@ def estimate_site(lat, lng, sqft, region="national", live_prices=None,
     land-value line. land_comp_label / land_comp_source describe its provenance.
     """
     lat, lng, sqft, region = validate_inputs(lat, lng, sqft, region)
+    try:
+        bt = get_build_type(build_type)
+    except KeyError:
+        raise ValidationError(
+            f"Build type must be one of: {', '.join(BUILD_TYPES)}."
+        )
 
     est = Estimate(lat=lat, lng=lng, sqft=sqft, region=region)
+    est.build_type = {"key": bt["key"], "name": bt["name"], "pue": bt["pue"],
+                      "facility_multipliers": bt["facility_multipliers"],
+                      "concrete_multiplier": bt["concrete_multiplier"],
+                      "confidence": bt["confidence"]}
+    est.power_density_w_per_sqft = bt["power_density_w_per_sqft"]
+    fm = bt["facility_multipliers"]
 
-    # Physical quantities
-    est.implied_mw = (sqft * POWER_DENSITY_W_PER_SQFT) / 1_000_000.0
+    # Physical quantities. Implied MW from the parcel uses the build type's
+    # power density (the hyperscale baseline is the original 250 W/sq ft).
+    est.implied_mw = (sqft * est.power_density_w_per_sqft) / 1_000_000.0
     mw = est.implied_mw
-    est.copper_tonnes_facility = mw * COPPER_TONNES_PER_MW_FACILITY
-    est.concrete_m3 = est.implied_mw * CONCRETE_M3_PER_MW
+    est.copper_tonnes_facility = mw * COPPER_TONNES_PER_MW_FACILITY * fm.get("copper", 1.0)
+    est.stainless_tonnes = mw * bt["stainless_t_per_mw"]
+    est.concrete_m3 = est.implied_mw * CONCRETE_M3_PER_MW * bt["concrete_multiplier"]
     est.concrete_tonnes = est.concrete_m3 * CONCRETE_TONNES_PER_M3
     est.acres = sqft / SQFT_PER_ACRE
 
@@ -283,7 +308,8 @@ def estimate_site(lat, lng, sqft, region="national", live_prices=None,
     # Aluminum: WEF/Kearney Dec 2025 whole-facility per-MW figure (reputable
     # secondary, named attribution). Priced live via Metals.Dev when available.
     # Expanded metals (metals_mix.py): 11 metals, each split facility / compute.
-    mix = compute_metals(mw, live_prices=live_prices, live_source=live_price_source)
+    mix = compute_metals(mw, facility_multipliers=fm, live_prices=live_prices,
+                         live_source=live_price_source)
     est.metals = mix["metals"]
     est.metals_excluded = mix["excluded"]
     by = {r["key"]: r for r in mix["metals"]}
@@ -352,16 +378,31 @@ def estimate_site(lat, lng, sqft, region="national", live_prices=None,
     # is already captured by the MW / copper / steel figures — including M&E here
     # would double-count). Priced directly per implied MW on the sourced shell-and-
     # core cost band, labelled as a benchmark figure, not a live quote.
-    est.shell_cost_usd = est.implied_mw * SHELL_COST_USD_PER_MW
+    shell_per_mw = bt["shell_cost_usd_per_mw"]
+    est.shell_cost_usd = est.implied_mw * shell_per_mw
     implied_shell_per_sqft = est.shell_cost_usd / sqft if sqft else 0.0
     est.price_sources["shell"] = (
-        f"BENCHMARK: shell / core & shell + architecture only, priced at "
-        f"${SHELL_COST_USD_PER_MW/1e6:,.1f}M per implied MW (within the ~$1.0-2.1M/MW "
-        f"shell-and-core band; ~{SHELL_COST_USD_PER_MW/12_500_000:.0%} of a typical "
-        f"all-in hard cost; ~${implied_shell_per_sqft:,.0f}/sq ft here). EXCLUDES the "
+        f"BENCHMARK ({bt['name']}): shell / core & shell + architecture only, priced at "
+        f"${shell_per_mw/1e6:,.1f}M per MW (within the ~$1.0-2.1M/MW "
+        f"shell-and-core band; ~${implied_shell_per_sqft:,.0f}/sq ft here). EXCLUDES the "
         f"IT power / electrical / mechanical chain to avoid double-counting with the "
         f"copper / steel / MW figures. See SOURCES.md."
     )
+
+    # Indicative compute-hardware capex: reference only, NOT in the total.
+    if bt.get("compute_capex_usd_per_mw"):
+        est.compute_capex_reference_usd = mw * bt["compute_capex_usd_per_mw"]
+        est.price_sources["compute_capex"] = (
+            f"REFERENCE ONLY (not in total): ~${bt['compute_capex_usd_per_mw']/1e6:,.1f}M "
+            f"per MW for servers + networking in a current rack-scale GPU build (2026 "
+            f"independent cost model of a 1 GW AI campus). See SOURCES.md 16."
+        )
+    if bt["stainless_t_per_mw"]:
+        est.price_sources["stainless"] = (
+            f"{est.stainless_tonnes:,.0f} t stainless coolant pipework "
+            f"(~{bt['stainless_t_per_mw']:.1f} t/MW, derived from pipe-length "
+            f"estimates; LOW confidence). Quantity only, not priced."
+        )
 
     # Battery-backup (UPS) metals provenance. The physical quantities below are the
     # backup-power slice of the expanded metals table; that table prices them as
