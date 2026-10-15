@@ -13,9 +13,14 @@ order of preference:
      PROXY. It is NOT industrial or data-center land and will understate DC-ready
      land by a wide margin; it is labelled as such everywhere it surfaces.
 
-  3. REGION tier -- the original broad national/northeast/west/south/midwest
-     industrial-land proxy, used only as a last resort for places with no state
-     or metro data (e.g. Alaska / Hawaii, which USDA does not survey).
+  3. NATIONAL fallback -- the national industrial-land proxy, used only as a last
+     resort where there is no state figure (Alaska, Hawaii and DC, which USDA does
+     not survey) or for non-US coordinates. Always labelled with the actual state /
+     county so the user still sees WHERE the parcel is.
+
+The old generic directional buckets (northeast / south / midwest / west) have been
+retired: a US parcel is now always described and benchmarked at STATE + COUNTY
+(or district / parish / borough / independent city) level.
 
 Every figure here has a real source documented in SOURCES.md (entries 6a / 6b).
 Nothing is fabricated: the state table is the USDA NASS published table verbatim,
@@ -27,27 +32,7 @@ WHICH tier a figure came from so the UI can be honest about what it represents.
 """
 
 from estimator import LAND_PRICE_USD_PER_ACRE
-
-# --- Region fallback, by US state -> broad region bucket (matches estimator.py) ---
-_STATE_TO_REGION = {
-    # Northeast / Mid-Atlantic
-    "CT": "northeast", "DE": "northeast", "ME": "northeast", "MD": "northeast",
-    "MA": "northeast", "NH": "northeast", "NJ": "northeast", "NY": "northeast",
-    "PA": "northeast", "RI": "northeast", "VT": "northeast", "VA": "northeast",
-    "WV": "northeast", "DC": "northeast",
-    # South
-    "AL": "south", "AR": "south", "FL": "south", "GA": "south", "KY": "south",
-    "LA": "south", "MS": "south", "NC": "south", "OK": "south", "SC": "south",
-    "TN": "south", "TX": "south",
-    # Midwest
-    "IL": "midwest", "IN": "midwest", "IA": "midwest", "KS": "midwest",
-    "MI": "midwest", "MN": "midwest", "MO": "midwest", "NE": "midwest",
-    "ND": "midwest", "OH": "midwest", "SD": "midwest", "WI": "midwest",
-    # West
-    "AZ": "west", "CA": "west", "CO": "west", "ID": "west", "MT": "west",
-    "NV": "west", "NM": "west", "OR": "west", "UT": "west", "WA": "west",
-    "WY": "west", "AK": "west", "HI": "west",
-}
+from geocode import state_abbr, US_STATE_NAMES
 
 # --- STATE tier: USDA NASS 2025 farm real-estate value, USD/acre ---------------
 # Source: USDA NASS, "Land Values 2025 Summary" (released 1 Aug 2025), table
@@ -165,7 +150,7 @@ CW_NATIONAL_DC_LAND_SOURCE = (
 
 
 def _match_metro(state_code, county, city):
-    """Return a METRO_COMPS entry if the reverse-geocoded place matches one."""
+    """Return a METRO_COMPS entry if the place (county / city) matches one."""
     if not state_code:
         return None
     hay = " ".join(x.lower() for x in (county or "", city or "") if x)
@@ -179,98 +164,159 @@ def _match_metro(state_code, county, city):
     return None
 
 
-def lookup_land_comp(reverse_result):
+def place_label(state_code=None, county=None, city=None, state_name=None):
+    """Human-readable 'County, ST' style label for a US place (no directions)."""
+    state_name = state_name or US_STATE_NAMES.get(state_code or "", None)
+    parts = [p for p in (county or city, state_name) if p]
+    return ", ".join(parts) if parts else "Unknown location"
+
+
+def state_context(state_code):
     """
-    Resolve a land comparable from a ReverseResult (geocode.reverse_geocode).
+    State-level benchmark context, so a parcel is compared against ITS state rather
+    than a broad directional bucket: the state's USDA raw-land value relative to
+    the US average, plus any quoted DC-land comparables elsewhere in the same state
+    (useful for the override step when the parcel sits in an emerging market).
+    """
+    if not state_code:
+        return None
+    ag = USDA_FARM_RE_USD_PER_ACRE_2025.get(state_code)
+    in_state = [
+        {"label": e["label"], "usd_per_acre": float(e["usd_per_acre"])}
+        for e in METRO_COMPS if e["state"] == state_code
+    ]
+    return {
+        "state_code": state_code,
+        "state_name": US_STATE_NAMES.get(state_code),
+        "usda_ag_usd_per_acre": float(ag) if ag else None,
+        "usda_ag_vs_us_avg": (ag / USDA_NATIONAL_AVG_2025) if ag else None,
+        "in_state_dc_land_comps": in_state,
+    }
+
+
+def lookup_land_comp_for_place(state_code=None, county=None, city=None,
+                               state_name=None, country_code="us"):
+    """
+    Resolve a land comparable directly from a US state (+ optional county /
+    district / city). This is what the UI's State + County fields call when the
+    user edits the auto-detected location, and what /api/estimate uses when a
+    state is supplied without a confirmed comparable.
 
     Returns a plain dict (JSON-serialisable) describing the chosen comparable and,
     importantly, which TIER it came from so the UI can label it honestly:
 
       {
         "usd_per_acre": float | None,
-        "tier": "metro" | "state" | "region",
+        "tier": "metro" | "state" | "national",
         "label": str,
         "source": str,
         "is_dc_land": bool,         # True only for the metro tier (power-ready DC land)
         "dc_premium_note": str,     # honest raw-vs-DC-land caveat for non-metro tiers
-        "detected": {state, county, city, country_code},
+        "detected": {state, state_code, county, city, country_code},
+        "place": "Loudoun County, Virginia",
+        "state_context": {...},     # see state_context()
       }
-
-    Non-US coordinates fall straight through to the national region proxy (the
-    model's figures are US-specific), labelled honestly.
     """
-    rev = reverse_result
-    detected = {
-        "state": getattr(rev, "state", None),
-        "state_code": getattr(rev, "state_code", None),
-        "county": getattr(rev, "county", None),
-        "city": getattr(rev, "city", None),
-        "country_code": getattr(rev, "country_code", None),
-    }
+    if state_code and len(state_code) > 2:
+        state_code = state_abbr(state_code)
+    state_code = (state_code or "").upper() or None
+    if state_code and not state_name:
+        state_name = US_STATE_NAMES.get(state_code)
 
-    # Non-US (or failed reverse lookup): use the national region proxy honestly.
-    if not getattr(rev, "ok", False) or detected["country_code"] != "us":
-        return {
-            "usd_per_acre": LAND_PRICE_USD_PER_ACRE["national"],
-            "tier": "region",
-            "label": "National industrial-land proxy",
-            "source": (
-                "Outside the US state/metro dataset -- using the broad national "
+    detected = {
+        "state": state_name,
+        "state_code": state_code,
+        "county": county or None,
+        "city": city or None,
+        "country_code": country_code,
+    }
+    place = place_label(state_code, county, city, state_name)
+    ctx = state_context(state_code)
+
+    def _result(**kw):
+        kw.update({"detected": detected, "place": place, "state_context": ctx})
+        return kw
+
+    # Non-US / unknown state: national proxy, honestly labelled.
+    if country_code != "us" or not state_code or state_code not in US_STATE_NAMES:
+        return _result(
+            usd_per_acre=LAND_PRICE_USD_PER_ACRE["national"],
+            tier="national",
+            label="National industrial-land proxy",
+            source=(
+                "Outside the US state/county dataset -- using the national "
                 "industrial-land proxy. Not a parcel-level appraisal."
             ),
-            "is_dc_land": False,
-            "dc_premium_note": "",
-            "detected": detected,
-        }
-
-    state_code = detected["state_code"]
+            is_dc_land=False,
+            dc_premium_note="",
+        )
 
     # 1) Metro / county tier: a real quoted DC-land transaction.
-    metro = _match_metro(state_code, detected["county"], detected["city"])
+    metro = _match_metro(state_code, county, city)
     if metro:
-        return {
-            "usd_per_acre": float(metro["usd_per_acre"]),
-            "tier": "metro",
-            "label": metro["label"],
-            "source": metro["source"],
-            "is_dc_land": True,
-            "dc_premium_note": (
+        return _result(
+            usd_per_acre=float(metro["usd_per_acre"]),
+            tier="metro",
+            label=metro["label"],
+            source=metro["source"],
+            is_dc_land=True,
+            dc_premium_note=(
                 "This is a power-ready / entitled data-center-land market figure "
                 "from a quoted transaction, not a raw-land proxy."
             ),
-            "detected": detected,
-        }
+        )
 
     # 2) State tier: USDA agricultural raw-land proxy (a floor, clearly labelled).
     if state_code in USDA_FARM_RE_USD_PER_ACRE_2025:
         ag = USDA_FARM_RE_USD_PER_ACRE_2025[state_code]
-        return {
-            "usd_per_acre": float(ag),
-            "tier": "state",
-            "label": f"{detected['state']} -- agricultural raw-land floor (USDA 2025)",
-            "source": USDA_SOURCE,
-            "is_dc_land": False,
-            "dc_premium_note": (
+        county_note = (
+            f" No quoted data-center-land transaction is on file for {county}, so "
+            f"the {state_name} state figure is used." if county else ""
+        )
+        return _result(
+            usd_per_acre=float(ag),
+            tier="state",
+            label=f"{place} -- {state_name} agricultural raw-land floor (USDA 2025)",
+            source=USDA_SOURCE + county_note,
+            is_dc_land=False,
+            dc_premium_note=(
                 "Raw/agricultural land is a FLOOR. Entitled, power-connected "
                 "data-center land in active markets trades roughly 20x-1,000x "
                 "higher (e.g. Virginia farmland ~$6,100/acre vs Loudoun County "
                 "data-center land ~$6.3M/acre, Nov 2025). Use the override to "
                 "search a specific data-center market if this parcel is one."
             ),
-            "detected": detected,
-        }
+        )
 
-    # 3) Region tier: last resort (e.g. AK / HI, which USDA does not survey).
-    region = _STATE_TO_REGION.get(state_code, "national")
-    return {
-        "usd_per_acre": LAND_PRICE_USD_PER_ACRE[region],
-        "tier": "region",
-        "label": f"Broad {region} industrial-land proxy",
-        "source": (
-            f"No state/metro figure for this location -- using the broad {region} "
-            "industrial-land proxy. Not a parcel-level appraisal."
+    # 3) National fallback: AK / HI / DC (not surveyed by USDA). Still labelled with
+    #    the real state + county, never a directional bucket.
+    return _result(
+        usd_per_acre=LAND_PRICE_USD_PER_ACRE["national"],
+        tier="national",
+        label=f"{place} -- national industrial-land proxy (no {state_name} state figure)",
+        source=(
+            f"USDA NASS does not publish a farm real-estate value for {state_name}, "
+            "and no quoted DC-land transaction is on file, so the national "
+            "industrial-land proxy is used. Not a parcel-level appraisal."
         ),
-        "is_dc_land": False,
-        "dc_premium_note": "",
-        "detected": detected,
-    }
+        is_dc_land=False,
+        dc_premium_note="",
+    )
+
+
+def lookup_land_comp(reverse_result):
+    """
+    Resolve a land comparable from a ReverseResult (geocode.reverse_geocode) by
+    delegating to lookup_land_comp_for_place() with the detected state + county.
+    Non-US coordinates (or a failed lookup) fall through to the national proxy.
+    """
+    rev = reverse_result
+    if not getattr(rev, "ok", False):
+        return lookup_land_comp_for_place(country_code=None)
+    return lookup_land_comp_for_place(
+        state_code=getattr(rev, "state_code", None),
+        county=getattr(rev, "county", None),
+        city=getattr(rev, "city", None),
+        state_name=getattr(rev, "state", None),
+        country_code=getattr(rev, "country_code", None),
+    )

@@ -168,6 +168,7 @@
     .headline .cell { background: var(--navy-2); padding: 16px 18px; }
     .headline .cell .k { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
     .headline .cell .v { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .headline .cell .loc { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
     .headline .cell .v small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
 
     .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
@@ -253,14 +254,17 @@
         <input id="sqft" type="number" step="any" value="500000" />
       </div>
 
-      <label for="region">US region (land proxy)</label>
-      <select id="region">
-        <option value="national">National average</option>
-        <option value="northeast">Northeast / Mid-Atlantic</option>
-        <option value="west">West</option>
-        <option value="south">South</option>
-        <option value="midwest">Midwest</option>
-      </select>
+      <div class="row">
+        <div>
+          <label for="usState">US state</label>
+          <select id="usState"><option value="">Auto-detect</option></select>
+        </div>
+        <div>
+          <label for="usCounty">County / district</label>
+          <input id="usCounty" type="text" autocomplete="off" spellcheck="false" placeholder="Auto-detect" />
+        </div>
+      </div>
+      <p class="hint" id="placeHint">Filled in automatically from the parcel location. Edit either field to re-benchmark against a different state or county.</p>
 
       <button id="go" class="primary">Estimate site value</button>
       <button id="share" class="ghost" style="display:none;">Copy shareable link to this parcel</button>
@@ -318,7 +322,8 @@
       intensity, shell cost, rack density, cooling thresholds, land proxy) is documented in SOURCES.md with its
       source, URL and last-verified date. Live copper pricing is a genuine API call to Metals.Dev; where a live
       price or source is unavailable, that line is excluded and labelled rather than fabricated. Land value is a
-      regional industrial-land proxy, not a parcel-level appraisal. This is a portfolio MVP, not a formal valuation.
+      state / county-level comparable (quoted county DC-land deal, else the state's USDA raw-land floor), not a
+      parcel-level appraisal. This is a portfolio MVP, not a formal valuation.
     </div>
   </footer>
 
@@ -435,8 +440,7 @@
       const ring = layerToLatLngs(drawnLayer).map(
         ([a, b]) => [Number(a.toFixed(6)), Number(b.toFixed(6))]
       );
-      const region = document.getElementById("region").value;
-      const payload = { p: ring, r: region };
+      const payload = { p: ring, ...hashExtras() };
       const encoded = encodeURIComponent(btoa(JSON.stringify(payload)));
       history.replaceState(null, "", location.pathname + location.search + "#poly=" + encoded);
     }
@@ -451,9 +455,12 @@
         if (!Array.isArray(ring) || ring.length < 3) return false;
         const latlngs = ring.map((p) => L.latLng(p[0], p[1]));
         const layer = L.polygon(latlngs, { color: "#19c3b2", weight: 2 });
-        setDrawnLayer(layer);
+        // Restore the place fields first; if a state was shared we resolve the
+        // comparable from it rather than re-geocoding.
+        restoreHashExtras(payload);
+        setDrawnLayer(layer, { detect: !payload.s });
+        if (payload.s) detectByPlace();
         map.fitBounds(layer.getBounds(), { padding: [30, 30] });
-        if (payload.r) document.getElementById("region").value = payload.r;
         setMode("draw");
         return true;
       } catch (e) {
@@ -475,7 +482,7 @@
       if (m === "manual") {
         const lat = parseFloat(document.getElementById("lat").value);
         const lng = parseFloat(document.getElementById("lng").value);
-        if (!isNaN(lat) && !isNaN(lng)) updateManualMarker(lat, lng);
+        if (!isNaN(lat) && !isNaN(lng)) { updateManualMarker(lat, lng); detectLandComp([lat, lng]); }
       } else if (manualMarker) {
         map.removeLayer(manualMarker); manualMarker = null;
       }
@@ -492,10 +499,76 @@
       document.getElementById(id).addEventListener("change", () => {
         const lat = parseFloat(document.getElementById("lat").value);
         const lng = parseFloat(document.getElementById("lng").value);
-        if (!isNaN(lat) && !isNaN(lng)) updateManualMarker(lat, lng);
+        if (!isNaN(lat) && !isNaN(lng)) { updateManualMarker(lat, lng); detectLandComp([lat, lng]); }
       })
     );
-    document.getElementById("region").addEventListener("change", updateUrlHash);
+    // ---- US state + county (replaces the old directional region dropdown) ----
+    const US_STATES = {
+      AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+      CO: "Colorado", CT: "Connecticut", DE: "Delaware", DC: "District of Columbia",
+      FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois",
+      IN: "Indiana", IA: "Iowa", KS: "Kansas", KY: "Kentucky", LA: "Louisiana",
+      ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota",
+      MS: "Mississippi", MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada",
+      NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+      NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon",
+      PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota",
+      TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia",
+      WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+    };
+    const stateSel = document.getElementById("usState");
+    const countyInp = document.getElementById("usCounty");
+    Object.entries(US_STATES)
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .forEach(([code, name]) => {
+        const o = document.createElement("option");
+        o.value = code; o.textContent = name; stateSel.appendChild(o);
+      });
+
+    function setPlaceFields(det) {
+      if (!det) return;
+      stateSel.value = det.state_code && US_STATES[det.state_code] ? det.state_code : "";
+      countyInp.value = det.county || det.city || "";
+    }
+
+    // Re-resolve the land comparable from the State + County fields (no geocoding).
+    async function detectByPlace() {
+      const st = stateSel.value;
+      if (!st) { if (drawnLayer) detectLandComp(); return; }
+      const panel = document.getElementById("landComp");
+      const body = document.getElementById("landCompBody");
+      panel.style.display = "block";
+      body.innerHTML = `<span class="src">Looking up ${countyInp.value ? countyInp.value + ", " : ""}${US_STATES[st]}…</span>`;
+      try {
+        const resp = await fetch("/api/detect-location", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: st, county: countyInp.value.trim() }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "lookup failed");
+        landComp = data.land_comp || null;
+        landCompConfirmed = false;
+        renderLandComp(data, { keepFields: true });
+      } catch (e) {
+        body.innerHTML = `<span class="src">Could not look up that place (${e.message}).</span>`;
+      }
+    }
+    stateSel.addEventListener("change", () => { detectByPlace(); updateUrlHash(); });
+    countyInp.addEventListener("change", () => { detectByPlace(); updateUrlHash(); });
+
+    // Extra state carried in the shareable link (place + build type + power layer).
+    function hashExtras() {
+      const x = {};
+      if (stateSel.value) x.s = stateSel.value;
+      if (countyInp.value.trim()) x.c = countyInp.value.trim();
+      return x;
+    }
+    function restoreHashExtras(p) {
+      if (p.s && US_STATES[p.s]) stateSel.value = p.s;
+      if (p.c) countyInp.value = p.c;
+    }
+
     document.getElementById("clearDraw").addEventListener("click", () => {
       drawnItems.clearLayers(); drawnLayer = null; setDrawReadout();
       history.replaceState(null, "", location.pathname + location.search);
@@ -586,17 +659,20 @@
     }
 
     // ---- Auto-detected land comparable (reverse-geocode the drawn centroid) ----
-    async function detectLandComp() {
-      if (!drawnLayer) { hideLandComp(); return; }
+    async function detectLandComp(point) {
+      if (!drawnLayer && !point) { hideLandComp(); return; }
       const panel = document.getElementById("landComp");
       const body = document.getElementById("landCompBody");
       panel.style.display = "block";
-      body.innerHTML = `<span class="src">Detecting location of the drawn parcel…</span>`;
+      body.innerHTML = `<span class="src">Detecting the state and county of the parcel…</span>`;
+      const payload = point
+        ? { lat: point[0], lng: point[1] }
+        : { polygon: layerToLatLngs(drawnLayer).map(([a, b]) => [a, b]) };
       try {
         const resp = await fetch("/api/detect-location", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ polygon: layerToLatLngs(drawnLayer).map(([a, b]) => [a, b]) }),
+          body: JSON.stringify(payload),
         });
         const data = await resp.json();
         landComp = data.land_comp || null;
@@ -608,27 +684,38 @@
       }
     }
 
-    function renderLandComp(data) {
+    function renderLandComp(data, opts) {
       const body = document.getElementById("landCompBody");
       const badge = document.getElementById("landCompBadge");
       const c = data.land_comp || {};
       const rev = data.reverse || {};
-      const place = [rev.county, rev.state].filter(Boolean).join(", ") ||
+      const place = c.place || [rev.county || rev.city, rev.state].filter(Boolean).join(", ") ||
                     (rev.ok ? (rev.display_name || "location detected") : "location not detected");
+      // Auto-fill the State + County fields from the detection (unless the user
+      // just typed them, in which case leave their entry alone).
+      if (!(opts && opts.keepFields) && c.detected) { setPlaceFields(c.detected); updateUrlHash(); }
       badge.textContent = c.tier ? c.tier.toUpperCase() : "DETECTED";
       badge.className = "badge " + (c.tier === "metro" ? "live" : (c.tier === "state" ? "proxy" : "static"));
       if (c.usd_per_acre) {
         const premium = c.dc_premium_note
           ? `<span class="src" style="color:var(--warn);">⚠ ${c.dc_premium_note}</span>` : "";
+        const sc = c.state_context || {};
+        const ctxLine = sc.usda_ag_vs_us_avg
+          ? `<span class="src">State benchmark: ${sc.state_name} raw land is ${fmtNum(sc.usda_ag_vs_us_avg, 2)}x the US average (USDA 2025).${
+              sc.in_state_dc_land_comps && sc.in_state_dc_land_comps.length && c.tier !== "metro"
+                ? " Quoted DC-land comps elsewhere in " + sc.state_name + ": " +
+                  sc.in_state_dc_land_comps.map((x) => `${x.label} $${fmtNum(x.usd_per_acre)}/ac`).join("; ") + "."
+                : ""}</span>` : "";
         body.innerHTML =
           `Detected: <strong>${place}</strong>.<br/>
            Suggested comparable: <span class="big">$${Number(c.usd_per_acre).toLocaleString("en-US")}/acre</span>
            <span class="src">${c.label || ""}${c.label ? " — " : ""}${c.source || ""}</span>
+           ${ctxLine}
            ${premium}`;
       } else {
         body.innerHTML =
           `Detected: <strong>${place}</strong>, but no granular land figure was found for it.
-           <span class="src">${c.source || "Falling back to the broad regional proxy — set a value manually if you have a better comparable."}</span>`;
+           <span class="src">${c.source || "Falling back to the national proxy — set a value manually if you have a better comparable."}</span>`;
       }
       document.getElementById("landConfirm").classList.remove("confirmed");
       document.getElementById("landConfirm").textContent = "Confirm comparable";
@@ -675,7 +762,7 @@
         const d = await resp.json();
         landComp = d.land_comp || null;
         landCompConfirmed = true;
-        renderLandComp(d);
+        renderLandComp(d, { keepFields: true });
         const btn = document.getElementById("landConfirm");
         btn.textContent = "Comparable confirmed ✓"; btn.classList.add("confirmed");
       });
@@ -693,7 +780,7 @@
         source: "Manually entered $/acre (user override).",
       };
       landCompConfirmed = true;
-      renderLandComp({ land_comp: landComp, reverse: { ok: true, display_name: "manual value" } });
+      renderLandComp({ land_comp: landComp, reverse: { ok: true, display_name: "manual value" } }, { keepFields: true });
       const btn = document.getElementById("landConfirm");
       btn.textContent = "Comparable confirmed ✓"; btn.classList.add("confirmed");
     });
@@ -725,7 +812,10 @@
       const landBadge = lc.tier === "metro" ? badge("live", "DC-LAND COMP")
         : lc.tier === "state" ? badge("proxy", "STATE AG PROXY")
         : lc.tier === "manual" ? badge("benchmark", "USER COMP")
-        : badge("proxy", "REGIONAL PROXY");
+        : badge("proxy", "NATIONAL PROXY");
+      const loc = r.location || {};
+      const placeLine = loc.place
+        ? `<div class="loc">${loc.place}${loc.state_code ? " <span class='badge proxy'>" + loc.state_code + "</span>" : ""}</div>` : "";
 
       // Value components for the comparative bars (copper/aluminum may be excluded).
       const comps = [
@@ -748,6 +838,7 @@
           <div class="cell">
             <div class="k">Total implied site value today</div>
             <div class="v">${fmtUSD(r.total_site_value_usd)}</div>
+            ${placeLine}
           </div>
         </div>
 
@@ -828,7 +919,7 @@
           Benchmarks are documented in SOURCES.md. <strong>Shell cost is a base-building $/sq ft benchmark that
           deliberately EXCLUDES the IT power / electrical / mechanical chain</strong> (already captured via the
           MW / copper / steel figures) to avoid double-counting. Land value is an <strong>auto-detected comparable
-          (metro DC-land transaction, state agricultural proxy, or broad region), not a parcel-level appraisal</strong>
+          (county DC-land transaction, else the state agricultural floor), not a parcel-level appraisal</strong>
           — confirm or override it above. Rack count and cooling method are indicative rules of thumb. Concrete and
           battery-backup metals are shown for context and not priced into the total. Aluminum and battery-metal
           intensity are sourced from WEF/Kearney, "From Minerals to Megawatts" (Dec 2025).
@@ -840,9 +931,10 @@
       const btn = document.getElementById("go");
       const errEl = document.getElementById("err");
       errEl.textContent = "";
-      const region = document.getElementById("region").value;
-
-      let body = { region };
+      let body = {};
+      // State + county (from detection, or as edited by the user).
+      if (stateSel.value) body.state = stateSel.value;
+      if (countyInp.value.trim()) body.county = countyInp.value.trim();
       // Pass the confirmed/edited land comparable so the server uses the granular
       // figure instead of the broad-region proxy. If the user never confirmed, we
       // still pass what was auto-detected (the server also re-detects as a backstop).

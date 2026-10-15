@@ -193,11 +193,21 @@ _US_STATE_ABBR = {
 }
 
 
+# USPS code -> display name (title-cased), used to label places at state level.
+US_STATE_NAMES = {
+    code: ("District of Columbia" if name == "district of columbia" else name.title())
+    for name, code in _US_STATE_ABBR.items()
+}
+
+
 def state_abbr(state_name):
-    """Map a full US state name to its USPS code, or None."""
+    """Map a full US state name (or an existing USPS code) to its USPS code, or None."""
     if not state_name:
         return None
-    return _US_STATE_ABBR.get(state_name.strip().lower())
+    s = state_name.strip()
+    if len(s) == 2 and s.upper() in US_STATE_NAMES:
+        return s.upper()
+    return _US_STATE_ABBR.get(s.lower())
 
 
 def reverse_geocode(lat, lng, timeout=10):
@@ -242,7 +252,14 @@ def reverse_geocode(lat, lng, timeout=10):
         )
 
     state = addr.get("state")
-    county = addr.get("county")
+    # County-level unit. Most states return "county" (incl. Louisiana parishes and
+    # Alaska boroughs); some places only carry a "state_district" or, for Virginia's
+    # independent cities, no county at all (the city is then used as the district).
+    county = (
+        addr.get("county")
+        or addr.get("state_district")
+        or addr.get("borough")
+    )
     city = (
         addr.get("city")
         or addr.get("town")

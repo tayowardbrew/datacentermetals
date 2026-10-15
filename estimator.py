@@ -113,9 +113,13 @@ STATIC_STEEL_PRICE_USD_PER_TONNE = 900.0
 # cost). 1.5 = a defensible mid-band default. See SOURCES.md entry 9.
 SHELL_COST_USD_PER_MW = 1_500_000.0
 
-# Regional average commercial/industrial land price (USD per acre).
+# Broad commercial/industrial land price proxies (USD per acre).
 # Generic industrial land proxy, NOT power-ready data-center-premium land.
 # Source: CBRE industrial land research. See SOURCES.md for the honesty caveat.
+# NOTE: US parcels are now described and benchmarked at STATE + COUNTY level (see
+# land_prices.py); only the "national" entry is still used, as the last-resort
+# fallback (non-US coordinates, or AK / HI / DC which USDA does not survey). The
+# directional keys are kept solely so old API callers passing `region` still work.
 LAND_PRICE_USD_PER_ACRE = {
     "national": 150_000.0,
     "northeast": 400_000.0,
@@ -289,8 +293,9 @@ def estimate_site(lat, lng, sqft, region, copper_price_usd_per_tonne,
         per_acre = LAND_PRICE_USD_PER_ACRE[region]
         est.land_value_usd = est.acres * per_acre
         est.price_sources["land"] = (
-            f"Regional average proxy ({region}): ${per_acre:,.0f}/acre. "
-            "NOT a parcel-level appraisal. See SOURCES.md."
+            f"Industrial-land proxy ({region}): ${per_acre:,.0f}/acre. No state / "
+            "county comparable was available. NOT a parcel-level appraisal. "
+            "See SOURCES.md."
         )
 
     # Steel cost (static price, clearly labeled)
