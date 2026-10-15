@@ -5,7 +5,7 @@ below with the figure used, the source, a URL, and the date it was last verified
 Where I could not find a strong primary source, that is stated explicitly rather than
 presenting a guess as fact.
 
-**Last verified for all entries below: 2026-09-23** (entries 9-11 added and verified 2026-09-30; entry 6 rebuilt granular and entries 5, 12, 13 added/revised and verified 2026-10-01; steel & copper re-verified 2026-10-01; entries 5 and 12 upgraded to the WEF/Kearney "From Minerals to Megawatts" Dec 2025 source, verified by direct PDF download and extraction, 2026-10-01).
+**Last verified for all entries below: 2026-09-23** (entries 9-11 added and verified 2026-09-30; entry 6 rebuilt granular and entries 5, 12, 13 added/revised and verified 2026-10-01; steel & copper re-verified 2026-10-01; entries 5 and 12 upgraded to the WEF/Kearney "From Minerals to Megawatts" Dec 2025 source, verified by direct PDF download and extraction, 2026-10-01; entry 6 moved to state + county granularity and entries 14-17 added and verified 2026-10-15).
 
 > Note on primary vs secondary sources: several of these benchmarks originate in
 > paywalled or subscription industry reports (BloombergNEF, Cushman & Wakefield,
@@ -176,6 +176,16 @@ presenting a guess as fact.
 
 ## 6. Land value — GRANULAR, auto-detected per-acre comparable (v2)
 
+> **v3 (2026-10-15): state + county granularity.** The generic directional buckets
+> (northeast / south / midwest / west) are retired. Every US parcel is now
+> described and benchmarked at **state + county** (or district / parish / borough /
+> independent city) level: the user sees and can edit the detected State + County,
+> and the comparable is resolved from them (county DC-land transaction, else the
+> state USDA figure). AK, HI and DC, which USDA does not survey, fall back to the
+> national industrial proxy but keep their real state / county label. The UI also
+> shows the state's raw-land value relative to the US average (USDA 2025, US avg
+> $4,350/ac) and any quoted DC-land comps elsewhere in the same state.
+
 The old five-bucket US-region dropdown has been replaced by an auto-detected,
 confirmable land comparable resolved in three tiers from the drawn parcel's
 reverse-geocoded location (state + county/metro). The tier used is always shown in
@@ -261,12 +271,18 @@ Virginia, Phoenix, Columbus and Chicago; weaker (listing averages only) for
 Dallas-Fort Worth; and only the agricultural proxy exists for markets like Salt Lake
 City, Omaha/Council Bluffs and Quincy WA — stated honestly in the UI when it applies.
 
-## 7. Live commodity prices — copper, aluminum
+## 7. Live commodity prices — copper, aluminum, nickel, lead, silver, gold
 
 - **Source:** Metals.Dev API, `https://api.metals.dev/v1/latest` (free tier, no
-  credit card). Industrial metals on free tier: copper, aluminum, lead, nickel,
-  zinc. Returned in metric tonnes (USD) by default.
-- **URL:** https://metals.dev/docs
+  credit card). One call returns every supported symbol: base metals (copper,
+  aluminum, lead, nickel, zinc) and precious metals (gold, silver, platinum,
+  palladium). The tool reads copper, aluminum, nickel, lead, silver and gold
+  with `unit=mt` (USD per metric tonne) and normalises by the response's own
+  `unit` field, since precious metals default to troy ounces.
+- **Not on Metals.Dev** (checked against https://metals.dev/symbols, 2026-10-15):
+  tin, cobalt, lithium, gallium, steel. These use dated static benchmarks (entry
+  14) rather than a second, unrelated price provider.
+- **URLs:** https://metals.dev/docs · https://metals.dev/symbols
 - **Honesty note:** Steel does NOT have a clean live spot price on the Metals.Dev
   free tier. Steel cost is therefore computed from a documented static price per
   tonne (see below), clearly labeled in the UI as a static benchmark, not a live
@@ -526,3 +542,187 @@ deliberate omission, not an oversight.
   and the state → USPS-code mapping is done locally in `geocode.py` (Nominatim does
   not reliably return the postal abbreviation). Non-US coordinates fall through to
   the national region proxy (the land dataset is US-specific), stated in the UI.
+
+## 14. Expanded metals coverage (11 metals) and the facility vs compute split
+
+- **Component intensities (kg per MW):** World Economic Forum / Kearney, **"From
+  Minerals to Megawatts"** (Dec 2025), **Figure 4**, "Data centre component
+  breakdown by mineral (kgs per MW)", attributed to Bank of America Securities,
+  IEA and Kearney analysis. Verified again by direct PDF download and text
+  extraction on 2026-10-15. Basis: a 2024 split of ~76% conventional (CPU) and
+  ~24% accelerated (GPU) capacity.
+  - URL: https://reports.weforum.org/docs/WEF_From_Minerals_to_Megawatts_2025.pdf
+
+  | Metal (kg/MW) | Cooling | Electrical | Backup | Servers | Networking |
+  |---|---|---|---|---|---|
+  | Copper | 3,600 | 3,500 | 2,200 | 2,000 | 280 |
+  | Aluminum | 6,700 | 460 | 1,200 | 2,700 | 260 |
+  | Iron | 18,000 | 9,900 | 14,000 | 5,100 | 660 |
+  | Nickel | 130 | 70 | 220 | 35 | 15 |
+  | Lead | 10 | — | 240 | 15 | — |
+  | Tin | 0.1 | 5 | 2 | 120 | 10 |
+  | Silver | <0.1 | 1 | 0.5 | 5 | 0.5 |
+  | Gold | <0.1 | 0.2 | <0.1 | 1 | <0.1 |
+  | Cobalt | — | — | 40 | 2 | 1 |
+  | Lithium | — | — | 30 | — | — |
+  | Gallium | — | — | — | 2 | 0.3 |
+
+  "<0.1" is entered as 0.05; "—" (not listed) as 0. Germanium, rare earths,
+  graphite and silicon are also in the figure but are not modelled as priced
+  metals (tiny quantities and/or no free price feed; graphite stays in the UPS
+  panel).
+- **Why these 11 (priority):** mass per MW (steel/iron, aluminum, copper, then
+  nickel, lead, tin) plus value / supply-criticality from the same figure's
+  "value chain contribution to global demand (2035)" row: data centres ≈ 6.0%
+  of global gallium demand, 2.4% germanium, 1.2% tin, 0.9% copper, 0.6% gold,
+  0.5% cobalt, 0.4% silver, 0.3% nickel and aluminum, 0.1% lithium.
+- **Facility vs compute:** cooling + electrical + backup (+ building structure and
+  near-site power connections) = FACILITY / campus shell infrastructure;
+  servers + networking = COMPUTE equipment.
+- **Double-counting rules:** copper keeps the existing 26 t/MW headline (entry 3);
+  WEF's five components sum to ~11.6 t/MW and the ~14.4 t/MW remainder is
+  attributed to near-site power connections (facility). Aluminum keeps 11.3 t/MW
+  (= the WEF sum, entry 5). Steel keeps the 0.016 t/sq ft building benchmark
+  (re-expressed as 64 t/MW at 250 W/sq ft) on the facility side; WEF's
+  cooling/electrical/backup equipment iron (~42 t/MW) is **not** added, because
+  the building-steel source says it already covers cooling systems and equipment
+  support and the overlap cannot be separated. Only WEF's server + networking
+  iron (~5.8 t/MW: chassis, racks) is added, on the compute side.
+- **Static prices (metals not on Metals.Dev), checked 2026-10-15:**
+  - **Tin $54,900/t** — LME tin settlement, 8 Sep 2026 (via cbonds LME tin index /
+    Westmetall). https://cbonds.com/indexes/181087/ · https://www.westmetall.com/en/markdaten.php
+  - **Cobalt ~$53,600/t** — cobalt metal, Rotterdam, 2 Oct 2026; China domestic
+    was ~$39,000/t on 30 Sep 2026 (via critical-minerals-news.com, citing SMM).
+    https://critical-minerals-news.com/cobalt-price/
+  - **Lithium ~$105,100/t contained Li** — derived from battery-grade lithium
+    carbonate **$19,750/t** (Benchmark Mineral Intelligence, CIF Asia, 2 Sep 2026)
+    ÷ 18.8% lithium content of Li2CO3. https://axis-intelligence.com/lithium-price/
+    **Caveat:** WEF does not state whether its lithium figure is contained Li or
+    carbonate-equivalent; contained Li is assumed. If it is LCE, the lithium value
+    is overstated ~5x (immaterial to the total either way: ~$3k/MW).
+  - **Gallium $433/kg** — China FOB export price, 30 Sep 2026 (rare-earth-mining.com,
+    citing SMM / USGS). Split market: China domestic ~$229/kg; European
+    high-purity spot has traded far higher. https://rare-earth-mining.com/gallium-price/
+  - **Steel $900/t** — unchanged (entry 8).
+- **Valuation basis (IMPORTANT):** values are **contained metal** (tonnes × refined
+  metal spot/reference price). This is the tool's existing "today's commodity
+  terms" lens. It is **not** recoverable scrap value (recovering gold or gallium
+  from boards is partial and costly) and **not** the price of the product the
+  metal sits in (nickel sulphate, lithium carbonate, GaN wafers).
+- **Notable result to sanity-check:** gold is the second-largest metal by value
+  after copper (~1.35 kg/MW, almost all in server boards; ~$170k/MW at ~$3,900/oz).
+  An independent order-of-magnitude check (high-grade server boards carry roughly
+  100-300 g Au per tonne of board; a MW of servers carries on the order of 1-2 t of
+  board) gives a few hundred g to ~1 kg/MW, so the WEF figure is plausible but at
+  the high end. Not adjusted.
+- **Considered, not modelled:** zinc (galvanising; no citable per-MW or per-sq-ft
+  data-center figure found, and absent from WEF Fig. 4, though it is on
+  Metals.Dev), platinum/palladium (on Metals.Dev, no intensity source),
+  germanium and rare earths (≤3 kg/MW, no free price).
+
+## 15. Build-type profiles (hyperscale campus, modular / prefab, liquid-cooled AI)
+
+No primary engineering source compares metals mix across build types. The
+**hyperscale campus** profile is the tool's existing, cross-validated baseline.
+The other two use multipliers on **facility-side** copper / aluminum / structural
+steel (compute-side intensities are not varied) plus concrete, stainless and
+density, built from secondary sources, derivations and explicit judgement calls.
+They are directional, not measured take-offs. The archetypes are described
+generically in the UI and code; the research started from publicly reported
+practices of leading Western hyperscale builders, which are deliberately not
+named.
+
+| | Hyperscale campus | Modular / prefab | Liquid-cooled AI |
+|---|---|---|---|
+| Power density (W/sq ft) | 250 (entry 1) | 200 — judgement, low | 800 — sourced band 600-1,200, medium |
+| Copper (facility) | ×1.0 — high | ×1.0 (0.9-1.1) — no source, low | ×1.5 (1.3-2.0) — trade press, medium-low |
+| Aluminum (facility) | ×1.0 — medium | ×1.1 (1.0-1.2) — judgement, low | ×0.8 (0.7-1.0) — judgement, low |
+| Structural steel per MW | ×1.0 — medium-high | ×1.25 (1.1-1.4) — derived, low-medium | ×0.55 (0.4-0.7) — derived, low-medium |
+| Concrete per MW | ×1.0 | ×0.5 (0.4-0.7) — low-medium | ×0.7 (0.5-0.9) — low |
+| Stainless pipework | ~0 | ~0 | +1.5 t/MW (0.5-5) — derived, low; quantity only |
+| Shell $/MW | $1.5M (entry 9) | $1.3M — ~13% lower first cost, low | $1.5M — see below, medium-low |
+| PUE | 1.2 — judgement | 1.3 — judgement, low | 1.15 — medium-low |
+
+**Evidence:**
+- *Copper, AI:* trade-press figures of 20-40 t/MW for modern liquid-cooled vs
+  8-15 t/MW traditional (Copper Development Association via Fastmarkets, entry 3),
+  and 15-21 vs up to 47 t/MW (attributed to BHP analysis). These mix inside-the-
+  fence and near-site scope, so the midpoint ×1.5 is applied with a wide range.
+  Rack busbars themselves are small (~0.2 t/MW per the GPU vendor's 800 V DC
+  material, which also says next-generation 800 V DC distribution can cut
+  distribution copper by up to ~45%; that would pull AI copper back to ~×1.1-1.3).
+  One press source says immersion cooling uses 40-60% more copper than air,
+  supporting the upper half of the range for immersion sites.
+  - https://blog.copper.org/data-centers/the-copper-advantage-in-high-density-data-center-cooling
+  - https://www.bhp.com/news/bhp-insights/2025/01/why-ai-tools-and-data-centres-are-driving-copper-demand
+  - https://developer.nvidia.com/blog/nvidia-800-v-hvdc-architecture-will-power-the-next-Generation-of-ai-factories
+  - https://investinglive.com/news/the-500000-ton-typo-why-data-center-copper-math-doesnt-add-up-20260113/
+  - https://www.woodmac.com/es/news/opinion/data-centres-copper-and-the-power-paradox/
+- *Aluminum:* cooling is ~55% of in-facility aluminum (WEF Fig. 4); liquid cooling
+  removes ~70-90% of heat from air, so fewer air-handler coils, but dry coolers
+  still use aluminum fins. No source quantifies the per-archetype change.
+- *Steel and concrete, AI:* floor area per MW falls 2.5-5× while slabs and frames
+  are heavier per sq ft (racks 4,000-8,000 lb; slabs 12-18" vs 6-8").
+  - https://www.datacenterknowledge.com/build-design/heavy-compute-ai-data-centers-have-a-weight-problem
+  - https://www.giatecscientific.com/education/data-center-concrete-challenges/
+- *Steel and concrete, modular:* a power/cooling vendor's steel-frame modular
+  life-cycle study reports >50% lower embodied carbon, mainly from replacing the
+  concrete shell with steel frames (tonnages behind a registration wall).
+  - https://www.vertiv.com/en-us/about/news-and-insights/articles/white-papers/how-steel-frame-modular-construction-cuts-data-center-embodied-carbon-by-more-than-half/
+- *Modular cost / speed:* prefab power and cooling modules quoted at ≥13% lower
+  first cost and substantially faster delivery (12-18 vs 24-36 months).
+  - https://www.apc.com/salestools/WTOL-7NGRBS/WTOL-7NGRBS_R3_EN.pdf
+  - https://www.datacentres.com/news/factory-built-and-fast-modular-construction-cuts-data-centre-delivery-times-by-4-slot1-2026-09-02
+- *AI density:* ~1,200 W/sq ft on a 1.2 GW, ~1M sq ft liquid-cooled project; rack-
+  scale GPU systems at 120-140 kW/rack.
+  - https://www.greshamsmith.com/projects/confidential-hyperscale-ai-data-center/
+  - https://newsletter.semianalysis.com/p/gb200-hardware-architecture-and-component
+- *Stainless, AI:* an industry estimate that a 100 MW AI campus needs ~50,000-
+  200,000 linear ft of 1/2"-4" welded stainless pipe; at ~2-5 lb/ft (Schedule 10S)
+  that is ~45-450 t per 100 MW → 0.5-5 t/MW, 1.5 used. Low confidence; shown as a
+  quantity only.
+  - https://www.titanfittings.com/articles/data-center-liquid-cooling-fittings
+- *Shell $/MW, AI:* Turner & Townsend put core/shell at ~9% of a liquid-cooled AI
+  build vs ~14% air-cooled (entry 9), but of a higher all-in cost (~$14M+/MW vs
+  ~$11M/MW), landing at a similar shell $/MW, so the baseline $1.5M/MW is kept.
+- *PUE:* global average 1.54 (sixth flat year); owner-operated hyperscale
+  ~1.10-1.15; colocation/enterprise ~1.58-1.80 (Uptime Institute Global Data
+  Center Survey 2025, via trade press).
+  - https://mgrid.org/2025/10/01/uptime-institute-data-center-pue-stagnation-2025-liquid-cooling/
+
+## 16. Compute hardware capex reference (liquid-cooled AI only; NOT in the total)
+
+- **Figure:** ~$26.1M per MW for servers ($21.2B) + networking ($4.9B) in a 1 GW
+  AI campus (total capex $37.9B; facility $11.4B), modelled for a hyperscaler-
+  owned campus with current rack-scale GPU servers, 5-year IT life.
+- **Source:** Epoch AI, "AI data center cost breakdown" data insight (14 May 2026).
+  https://epoch.ai/data-insights/ai-datacenter-cost-breakdown
+- **Why reference-only:** the tool values everything on a contained-commodity basis;
+  equipment purchase cost is a different basis, depreciates over ~5 years, and is
+  usually financed separately from the site. It is shown for scale only, and only
+  for the AI build type (no reliable public figure was found for a mixed CPU/GPU
+  campus fleet or for modular builds).
+
+## 17. Power / capacity layer (MW ⇄ GWh/yr, state electricity tariff)
+
+- **Unit convention:** MW of IT capacity is primary (matches the existing app);
+  GWh/yr of IT energy is accepted as an alternative input and shown as an output.
+- **Utilization (default 67%, user-adjustable 10-100%):** the California Energy
+  Commission's 2024 IEPR data-center forecast assumes peak data-center load ≈ 67%
+  of requested capacity, based on existing data centers. Used here as the average
+  utilization, which is a simplification (annual average is at or below peak).
+  Published observed load factors range from >52% (Texas hyperscale profiles) to
+  ~90% (some academic models).
+  - https://www.energy.ca.gov/sites/default/files/2025-03/Data_Center_Forecast_Final_ada.pdf
+- **Formulae:** IT GWh/yr = MW × 8,760 × utilization ÷ 1,000; facility GWh/yr = IT
+  GWh × PUE (build type, entry 15).
+- **State tariff:** US EIA Electric Power Monthly, Table 5.6.B, average price of
+  electricity to **industrial** customers by state, **YTD through July 2026**
+  (US 9.03 c/kWh; e.g. VA 10.08, TX 6.72, AZ 7.66, OH 10.32). YTD used rather
+  than a single month to damp seasonality. Large data centers often contract
+  below the state industrial average, so the annual-cost line is indicative and
+  never in the site value.
+  - https://www.eia.gov/electricity/monthly/xls/table_5_06_b.xlsx
+- **Consistency check:** when a capacity is stated, the tool reports the implied
+  W/sq ft on the parcel and flags it if the stated MW is >1.5× or <0.67× the
+  parcel-implied MW at the selected build type's density.

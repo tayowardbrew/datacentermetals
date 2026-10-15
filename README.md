@@ -4,15 +4,25 @@ Estimate the implied power capacity, materials intensity, construction cost and 
 implied value of a candidate data center parcel by **searching for a location, then
 drawing the parcel on satellite imagery** (or entering raw coordinates and a footprint).
 A free location-search box flies the map to any address/area/city; you then draw the
-parcel and the tool **auto-detects the state/county and suggests a land comparable** you
-can confirm or override.
+parcel and the tool **auto-detects the state and county and suggests a land comparable**
+you can confirm or override.
 
 The tool estimates:
 
 - **Footprint area** from a parcel you **draw on the map** (polygon or rectangle),
   computed geodesically (spherical-excess area, correct at scale), or from a manual
   square-footage entry.
-- **Implied power capacity (MW)** from a sourced watts-per-square-foot power density.
+- **Three build-type modes** (Hyperscale campus, Modular / prefab, Liquid-cooled AI),
+  each with its own power density and **facility metals mix** (copper, aluminum,
+  structural steel, concrete and stainless multipliers vs the baseline), selectable as
+  cards with a "+" panel explaining how each differs. The choice changes the metals
+  tonnage, not just the label. Multipliers are hedged and sourced in SOURCES.md 15.
+- **Implied power capacity (MW)** from the build type's watts-per-square-foot density,
+  **or a stated capacity** (MW of IT load, or GWh/yr of IT energy) via the
+  **power / capacity layer**, which then drives every per-MW quantity while the
+  parcel-based figure is kept alongside as a cross-check. Outputs annual IT and
+  facility energy (GWh/yr) and an indicative annual power cost at the parcel state's
+  industrial tariff (US EIA).
 - **Shell / base-building construction cost**, derived as the sourced shell/core share
   (~14%, Turner & Townsend) of an all-in $/MW build cost — **deliberately excluding the
   power / electrical / mechanical chain** (already captured by the MW / copper / steel
@@ -36,16 +46,29 @@ The tool estimates:
   sourced white-space ratio and sq ft/rack) and the cooling method typical at the
   implied kW/rack density (air → rear-door → direct-to-chip → immersion).
 - **Concrete volume/tonnage** as a context line item (shown, not priced).
-- **Live copper price** via the [Metals.Dev](https://metals.dev/) API (free tier).
-- **Land value** via a **granular, auto-detected and confirmable comparable**: a real
-  quoted data-center-land $/acre for named hotspots (Northern Virginia, Phoenix,
-  Columbus, Chicago…), falling back to the state USDA agricultural raw-land floor, then
-  to a broad regional proxy — with the tier always shown and an honest raw-vs-DC-land
-  caveat. Optional secondary [RentCast](https://developers.rentcast.io/) AVM lookup.
+- **11 metals with a facility vs compute split:** steel, copper, aluminum, nickel,
+  lead, tin, silver, gold, cobalt, lithium and gallium, each split between the
+  facility (cooling, power distribution, backup, structure, near-site connections)
+  and the compute equipment (servers, chips, racks, networking), from the WEF/Kearney
+  component table (SOURCES.md 14). Valued as contained metal.
+- **Live metal prices** via the [Metals.Dev](https://metals.dev/) API (free tier):
+  copper, aluminum, nickel, lead, silver, gold. Tin, cobalt, lithium, gallium and
+  steel are not on Metals.Dev and use dated, labelled static benchmarks.
+- **Land value** via a **granular, auto-detected and confirmable comparable** at
+  **state + county** level: a real quoted data-center-land $/acre for named counties
+  (Loudoun, Prince William, Maricopa, Franklin/Licking…), falling back to the state USDA
+  agricultural raw-land floor (AK/HI/DC: national proxy) — with the tier always shown,
+  the state's raw-land value vs the US average, and an honest raw-vs-DC-land caveat.
+  The detected State + County are editable. Optional secondary
+  [RentCast](https://developers.rentcast.io/) AVM lookup.
 - **Location search** above the map (free [OpenStreetMap Nominatim](https://nominatim.openstreetmap.org/),
   no API key): type an address/area/city, pick a result, the map flies there.
-- **Total implied site value today** = land value + priced materials + shell cost,
-  broken down line by line.
+- **Total implied site value today** = land value + shell cost + priced metals,
+  **split into (a) facility / campus infrastructure** (land + shell + facility-side
+  metals) **and (b) compute equipment** (metals contained in the servers, chips,
+  racks and networking), broken down line by line. For the Liquid-cooled AI type a
+  compute-hardware purchase-cost reference (~$26M/MW) is shown for scale, outside
+  the total.
 - A **shareable link**: the drawn parcel is encoded into the page URL, so opening the
   same link on another device reproduces the identical parcel and estimate (no account
   or backend state needed). Plus a **Google Maps link** and an **inline satellite view**
@@ -77,15 +100,20 @@ about what each number is:
 | Line item            | What it actually is |
 |----------------------|---------------------|
 | Footprint area       | **Geodesically computed** from the drawn parcel (correct at scale), or a manual entry. |
-| Power capacity (MW)  | An **assumption** from a fixed W/sq ft density (mid-range of a sourced band). |
+| Power capacity (MW)  | An **assumption** from the build type's W/sq ft density, **or the user's stated capacity** (MW or GWh/yr) when given. |
+| Build-type metals mix | **Directional multipliers** on facility copper / aluminum / steel / concrete. Baseline is sourced; most others are secondary-source or judgement calls (confidence shown in SOURCES.md 15). |
+| Annual energy (GWh/yr) | MW x 8,760 h x an **adjustable utilization assumption** (default 67%) x PUE. |
+| Power cost           | **Indicative**: state industrial average tariff (US EIA). Not in the site value. |
 | Shell cost           | A **benchmark-derived** figure (sourced % of a sourced $/MW build), **excluding** the power/M&E chain to avoid double-counting. |
 | Steel / copper tonnage | **Researched benchmarks** (material-intensity figures), not measured; both re-verified against 2026 sources. |
-| Aluminum tonnage     | A **reputable-secondary benchmark** (WEF/Kearney Dec 2025, whole-facility, 11.3 t/MW). |
-| Copper / aluminum price | A **genuine live API call** to Metals.Dev (when a key is configured). |
-| Steel price          | A **static benchmark** — steel is not on the Metals.Dev free tier. Labeled as such. |
-| Battery (UPS) metals | **Two figures**: WEF/Kearney headline (real fleet mix) + our own 5-min-ride-through lower-bound cross-check; small at UPS scale; **not priced**. |
+| Other metal tonnage  | **Reputable-secondary component table** (WEF/Kearney Dec 2025, Fig. 4), split facility vs compute. |
+| Copper, aluminum, nickel, lead, silver, gold price | A **genuine live API call** to Metals.Dev (when a key is configured). |
+| Steel, tin, cobalt, lithium, gallium price | **Static, dated benchmarks** — not on Metals.Dev. Labelled STATIC. |
+| Metal values         | **Contained metal** (tonnes x refined-metal price), not scrap-recovery value or battery-grade product price. |
+| Compute value        | Metals contained in the compute equipment; equipment purchase cost is shown as a reference only, outside the total. |
+| Battery (UPS) metals | **Two figures**: WEF/Kearney headline (real fleet mix) + our own 5-min-ride-through lower-bound cross-check; small at UPS scale; headline quantities valued as contained metal in the metals table. |
 | Rack count / cooling | **Indicative rules of thumb** (white-space ratio, sq ft/rack, kW/rack cooling bands), not an engineering design. |
-| Land value           | A **granular auto-detected comparable** (metro DC-land transaction → state USDA ag proxy → region proxy), tier shown; **not a parcel-level appraisal**. |
+| Land value           | A **state + county comparable** (county DC-land transaction → state USDA ag proxy → national proxy), tier shown; **not a parcel-level appraisal**. |
 | Location detection   | **Free OpenStreetMap Nominatim** forward + reverse geocoding (debounced, rate-limited per policy). |
 | RentCast AVM         | An **optional** secondary live lookup; coverage for raw coordinates is uncertain. |
 | Concrete             | Shown for context only; **not priced into the total**. |
@@ -116,9 +144,13 @@ These are deliberately **not** attempted in this version and are called out hone
   reputable-secondary whole-facility benchmark (WEF/Kearney, Dec 2025, 11.3 t/MW,
   sourced to Bank of America Securities/IEA/Kearney) — a clear upgrade over an
   earlier bottom-up lower-bound estimate used before that source was found.
-- **(d) Stainless steel as a separate line.** Researched but **not** separately modelled:
-  no citable stainless-per-MW figure was found, so it is folded into the steel band
-  rather than invented (see SOURCES.md entry 12).
+- **(d) Stainless steel as a separate line.** Still no citable stainless-per-MW figure.
+  For the Liquid-cooled AI build type only, a low-confidence derived quantity
+  (~1.5 t/MW of coolant pipework) is shown, not priced (SOURCES.md 15); otherwise it
+  stays folded into the steel band (SOURCES.md 12).
+- **(f) Build-type metals multipliers from primary data.** The modular and AI
+  multipliers are directional (secondary sources and judgement calls). A real
+  material take-off per archetype would replace them.
 - **(e) Sensitivity / range outputs.** Currently single-point mid-range estimates; a
   future version could show low/high bands from the sourced ranges.
 
@@ -153,7 +185,7 @@ Change the port with `PORT=8080 python app.py`.
 
 | Variable             | Required? | Purpose |
 |----------------------|-----------|---------|
-| `METALS_DEV_API_KEY` | Optional  | Live copper/aluminum spot prices from Metals.Dev (free tier, no card). Without it, copper cost is excluded from the total and clearly labeled. |
+| `METALS_DEV_API_KEY` | Optional  | Live copper, aluminum, nickel, lead, silver and gold prices from Metals.Dev (free tier, no card). Without it, those metals' values are excluded from the total (tonnage still shown) and clearly labeled; static-priced metals are unaffected. |
 | `RENTCAST_API_KEY`   | Optional  | Secondary parcel-value AVM lookup from RentCast. Without it, the regional land proxy is used (which is the primary approach regardless). |
 
 **Both keys are optional.** The app is designed to run and produce a full, honest
@@ -165,8 +197,8 @@ configured" message rather than crashing. This has been verified end to end.
 1. Sign up at <https://metals.dev/> (free tier, no credit card).
 2. Copy the API key from your dashboard.
 3. `export METALS_DEV_API_KEY=the_key` (or put it in `.env` and load it).
-4. Restart the server. The copper line will switch from "excluded / NO KEY" to a
-   **LIVE PRICE** figure and be included in the total automatically.
+4. Restart the server. The live-priced metals will switch from "NO PRICE / excluded" to
+   **LIVE** figures and be included in the total automatically.
 
 Same pattern for `RENTCAST_API_KEY`.
 
@@ -175,14 +207,17 @@ Same pattern for `RENTCAST_API_KEY`.
 ## Project structure
 
 ```
-tayo-datacenter-estimator/
-├── app.py              # Flask server: page + /api/estimate, /api/geocode, /api/detect-location
+datacentermetals/
+├── app.py              # Flask server: page + /api/estimate, /api/geocode, /api/detect-location, /api/build-types
 ├── estimator.py        # Pure calculation logic + benchmark constants + input validation
+├── metals_mix.py       # 11-metal per-MW intensities by component, facility vs compute split, price basis
+├── build_types.py      # The three build-type profiles (density, metals-mix multipliers, PUE)
+├── power.py            # Power / capacity layer: MW <-> GWh/yr, state industrial tariffs (EIA)
 ├── geometry.py         # Geodesic polygon-area calc for drawn parcels (no network)
 ├── capacity.py         # Indicative rack-count + cooling-method logic (no network)
 ├── geocode.py          # OpenStreetMap Nominatim forward + reverse geocoding (rate-limited)
-├── land_prices.py      # Granular land comparables: metro DC-land / state USDA / region
-├── metals_client.py    # Metals.Dev live-price client (graceful no-key handling)
+├── land_prices.py      # State + county land comparables: county DC-land / state USDA / national
+├── metals_client.py    # Metals.Dev live-price client, all supported metals (graceful no-key handling)
 ├── land_value.py       # Optional RentCast AVM client (graceful no-key handling)
 ├── static/
 │   └── index.html      # Single-page frontend (Leaflet + Leaflet.draw + Esri tiles, no build step)
@@ -198,27 +233,42 @@ tayo-datacenter-estimator/
 manual **lat/lng/sqft** (fallback):
 
 ```json
-{ "polygon": [[41.8781,-87.6298],[41.8781,-87.6250],[41.8820,-87.6250],[41.8820,-87.6298]], "region": "national" }
+{ "polygon": [[41.8781,-87.6298],[41.8781,-87.6250],[41.8820,-87.6250],[41.8820,-87.6298]],
+  "state": "IL", "county": "Cook County", "build_type": "ai_liquid" }
 ```
 
 ```json
-{ "lat": 41.8781, "lng": -87.6298, "sqft": 500000, "region": "national" }
+{ "lat": 41.8781, "lng": -87.6298, "sqft": 500000, "state": "IL",
+  "build_type": "hyperscale", "capacity_value": 120, "capacity_unit": "mw", "utilization": 0.67 }
 ```
+
+Optional fields: `state` (USPS code or name) and `county` (describe / benchmark the
+parcel at state + county level; detected automatically if omitted), `build_type`
+(`hyperscale` default, `modular`, `ai_liquid`), `capacity_value` + `capacity_unit`
+(`mw` or `gwh` = GWh/yr of IT energy) for the power layer, and `utilization`
+(0.1-1.0, default 0.67).
 
 When a `polygon` is supplied it takes priority: the server recomputes its enclosed area
 geodesically (it does not trust a browser-sent number) and derives the lat/lng from the
 polygon centroid. An optional `land_comp` object (the confirmed/overridden land
 comparable) sets the land $/acre; if absent the server reverse-geocodes the centroid and
-picks the comparable itself. `region` (one of `national`, `northeast`, `west`, `south`,
-`midwest`) is the last-resort land fallback. Returns a JSON breakdown of quantities,
-per-line values (incl. aluminum), battery-metal quantities, shell cost, rack capacity /
-cooling, price provenance, the detected `land_comp`, and the total. Invalid input returns
-HTTP 400 with a clear message.
+picks the comparable itself (from `state`/`county` if given, else by reverse-geocoding).
+The old `region` field is still accepted for backward compatibility but no longer used
+by the UI. Returns a JSON breakdown of quantities, the 11-row `metals` table (facility /
+compute tonnes and values, price basis), `facility_value_usd` / `compute_value_usd`,
+the `power` block (driving MW, parcel MW, GWh/yr, state tariff), `build_type`,
+battery-metal quantities, shell cost, rack capacity / cooling, price provenance, the
+detected `land_comp` and `location`, and the total. Invalid input returns HTTP 400 with
+a clear message.
+
+`GET /api/build-types` returns the three build-type profiles (copy and the numbers that
+drive the estimate).
 
 `GET /api/geocode?q=<text>` forward-geocodes a free-text query (via Nominatim) to
 candidate places for the search box. `POST /api/detect-location` with a `polygon` (or
 `lat`/`lng`) reverse-geocodes the centroid and returns the auto-detected land comparable
-for the user to confirm or override.
+for the user to confirm or override; with `state` (+ optional `county`) it resolves the
+comparable for that place directly, without geocoding.
 
 `GET /api/health` reports status, whether each API key is configured, and the geocoder.
 
