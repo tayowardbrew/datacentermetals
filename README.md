@@ -129,7 +129,7 @@ These are deliberately **not** attempted in this version and are called out hone
 Requirements: Python 3.9+.
 
 ```bash
-cd tayo-datacenter-estimator
+cd datacentermetals
 
 # 1. Create a virtual environment and install dependencies
 python3 -m venv .venv
