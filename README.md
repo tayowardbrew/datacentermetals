@@ -92,6 +92,19 @@ the data-center buildout.
 
 ---
 
+## Understanding the Controls (plain-language glossary)
+
+- **Latitude / Longitude** — the exact map coordinates of the parcel. Auto-filled when you draw a shape on the map or use the place search; you normally never type these by hand.
+- **Square Footage** — size of the building footprint, in square feet. Used to estimate power capacity when you haven't entered a planned capacity directly (see below).
+- **US State / US County** — auto-detected from where you drew the parcel. Used to pick the right regional land-price comp and state electricity tariff. You can type to override if auto-detect gets it wrong.
+- **Build Type cards** (Hyperscale campus / Modular-prefab / Liquid-cooled AI) — pick which kind of data center this is. This changes the *entire metals mix* per MW, not just power density — e.g. a liquid-cooled AI build uses more copper (denser power/cooling gear) but less building steel (far more power fits in less floor area) than a hyperscale campus. Press the "+" on each card to see exactly how it differs, with sourcing/confidence notes.
+- **Planned IT Capacity** (optional, MW or GWh/yr) — fill this in only if you already know the real planned power capacity (e.g. from a press release or utility filing). If left blank, the tool estimates capacity from your square footage and the selected build type's power density instead. If you provide BOTH a capacity and a parcel, the tool cross-checks them and flags it if the stated capacity looks implausible for that parcel size (see Avg Utilization below for the related unit conversion).
+- **Avg Utilization** (default 67%) — what percentage of maximum rated capacity the facility actually draws on average over a year (a data center never runs flat-out every second — there's downtime, maintenance, lighter-load periods). This is what converts a peak MW figure into a realistic annual GWh/yr energy figure, which then feeds the metals and cost totals. Adjustable if you think a specific site runs harder or lighter than that.
+- **Place Search** — a text box to jump the map to a location instead of scrolling/zooming manually. Doesn't affect the estimate itself, just navigation.
+- **Land Comp Override** — lets you manually type in a known $/acre land value for a specific area if you have a better number than the tool's own automatic three-tier lookup (real metro-level deals → state-level USDA proxy → generic regional fallback, see Land Value section below).
+
+---
+
 ## Honesty about scope (read this before trusting a number)
 
 This is a **portfolio MVP**, not a production appraisal tool. It is deliberately precise
